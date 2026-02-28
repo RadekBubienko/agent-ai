@@ -3,18 +3,20 @@ import { db } from "@/lib/db";
 import { sendEducationEmail, sendDecisionEmail } from "@/lib/mailer";
 
 export async function GET(request: Request) {
-  const isVercelCron = request.headers.get("x-vercel-cron") === "1";
-  const authHeader = request.headers.get("authorization");
-
-  if (!isVercelCron && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
-    const authHeader = request.headers.get("authorization");
+    const { searchParams } = new URL(request.url)
+    const secret = searchParams.get("secret")
 
-    if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const isVercelCron = request.headers.get("x-vercel-cron") === "1"
+
+    if (
+      !isVercelCron &&
+      secret !== process.env.CRON_SECRET
+    ) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
     const [rows]: any = await db.execute(
