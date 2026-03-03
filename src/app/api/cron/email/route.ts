@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         }
 
         if (row.type === "decision") {
-          await sendDecisionEmail(row.email, row.name);
+          await sendDecisionEmail(row.email, row.name, row.leadID);
         }
 
         await db.execute(
