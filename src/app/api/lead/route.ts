@@ -81,13 +81,15 @@ export async function POST(request: Request) {
 
     /* ---------- DB INSERT ---------- */
 
+    let leadId: number;
+
     try {
       const [result]: any = await db.execute(
-        "INSERT INTO leads (name, email, ip_address) VALUES (?, ?, ?)",
+        "INSERT INTO leads (name, email, ip_address, segment) VALUES (?, ?, ?, 'neutral')",
         [name, email, ip],
       );
 
-      const leadId = result.insertId;
+      leadId = result.insertId;
 
       await db.execute(
         `INSERT INTO email_sequences (lead_id, type, send_at)
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
         VALUES (?, 'decision', DATE_ADD(NOW(), INTERVAL 3 DAY))`,
         [leadId],
       );
-      
+
     } catch (error: any) {
       if (error.code === "ER_DUP_ENTRY") {
         return NextResponse.json(
@@ -113,8 +115,9 @@ export async function POST(request: Request) {
     }
 
     /* ---------- SEND EMAIL ---------- */
+    
     try {
-      const info = await sendWelcomeEmail(email, name);
+      const info = await sendWelcomeEmail(email, name, leadId);
       console.log("EMAIL SENT:", info.messageId);
     } catch (emailError) {
       console.error("EMAIL ERROR:", emailError);

@@ -9,6 +9,8 @@ type Lead = {
   created_at: string;
   ip_address: string;
   status: string;
+  segment: string;
+  total_score: number;
 };
 
 type Stat = {
@@ -33,6 +35,7 @@ export default function AdminPage() {
   const [todayNew, setTodayNew] = useState(0);
   const [toFollowUp, setToFollowUp] = useState(0);
   const [ipStats, setIpStats] = useState<any[]>([]);
+  const [segmentStats, setSegmentStats] = useState<any[]>([]);
 
   const fetchData = async (
     adminToken: string,
@@ -69,6 +72,7 @@ export default function AdminPage() {
     setTodayNew(data.todayNew);
     setToFollowUp(data.toFollowUp);
     setIpStats(data.ipStats);
+    setSegmentStats(data.segmentStats);
   };
 
   useEffect(() => {
@@ -157,6 +161,14 @@ export default function AdminPage() {
                 <p className="text-sm">Skontaktowane dziś</p>
                 <p className="text-2xl font-bold">{toFollowUp}</p>
               </div>
+            </div>
+            <div className="grid grid-cols-4 gap-4 mb-8">
+              {segmentStats.map((s, i) => (
+                <div key={i} className="bg-blue-50 p-4 rounded">
+                  <p className="text-sm text-gray-500">{s.segment}</p>
+                  <p className="text-2xl font-bold">{s.count}</p>
+                </div>
+              ))}
             </div>
 
             <button
@@ -294,6 +306,8 @@ export default function AdminPage() {
                   <th className="p-2">Data</th>
                   <th className="p-2">IP</th>
                   <th className="p-2">Status</th>
+                  <th className="p-2">Segment</th>
+                  <th className="p-2">Score</th>
                 </tr>
               </thead>
               <tbody>
@@ -330,6 +344,8 @@ export default function AdminPage() {
                         <option value="closed">closed</option>
                       </select>
                     </td>
+                    <td className="p-2 font-semibold">{lead.segment}</td>
+                    <td className="p-2">{lead.total_score}</td>
                   </tr>
                 ))}
               </tbody>

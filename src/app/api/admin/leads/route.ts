@@ -55,13 +55,21 @@ export async function GET(req: NextRequest) {
     // leads
     const [rows] = await db.query(
       `
-      SELECT id, name, email, created_at, ip_address, status
-      FROM leads
-      ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-      `,
-      [...values, limit, offset],
+    SELECT 
+      id,
+      name,
+      email,
+      created_at,
+      ip_address,
+      status,
+      segment,
+      total_score
+    FROM leads
+    ${whereClause}
+    ORDER BY created_at DESC
+    LIMIT ? OFFSET ?
+    `,
+        [...values, limit, offset],
     );
 
     // daily stats
@@ -78,6 +86,13 @@ export async function GET(req: NextRequest) {
       SELECT status, COUNT(*) as count
       FROM leads
       GROUP BY status
+    `);
+
+    // segments stats
+    const [segmentStats] = await db.query(`
+      SELECT segment, COUNT(*) as count
+      FROM leads
+      GROUP BY segment
     `);
 
     const [[{ todayNew }]]: any = await db.query(`
@@ -108,6 +123,7 @@ export async function GET(req: NextRequest) {
       total,
       stats,
       statusStats,
+      segmentStats,
       todayNew,
       toFollowUp,
       ipStats,
