@@ -1,12 +1,22 @@
-import LeadForm from "@/components/LeadForm"
+import Hero from "@/components/Hero";
+import Problem from "@/components/Problem";
+import Signal from "@/components/Signal";
+import Product from "@/components/Product";
+import PathChoice from "@/components/PathChoice";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-black text-white gap-8">
-      <h1 className="text-4xl font-bold">
-        Agent AI – Lead System
-      </h1>
+    <main className="flex flex-col text-gray-800">
+      <Hero />
 
-      <LeadForm />
+      <Problem />
+
+      <Signal />
+
+      <Product />
+
+      <PathChoice />
+
     </main>
-  )}
+  );
+}

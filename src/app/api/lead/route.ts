@@ -21,6 +21,8 @@ const leadSchema = z.object({
   name: z.string().min(2, { message: "Imię musi mieć min. 2 znaki" }).max(100),
 
   email: z.string().email({ message: "Nieprawidłowy email" }).max(255),
+
+  path: z.enum(["product", "business", "education"]).optional(),
 });
 
 /* =========================
@@ -77,7 +79,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const { name, email } = parsed.data;
+    const { name, email, path } = parsed.data;
+    const segment = path ?? "education";
 
     /* ---------- DB INSERT ---------- */
 
@@ -85,8 +88,8 @@ export async function POST(request: Request) {
 
     try {
       const [result]: any = await db.execute(
-        "INSERT INTO leads (name, email, ip_address, segment) VALUES (?, ?, ?, 'neutral')",
-        [name, email, ip],
+        "INSERT INTO leads (name, email, ip_address, segment) VALUES (?, ?, ?, ?)",
+        [name, email, ip, segment],
       );
 
       leadId = result.insertId;
@@ -102,7 +105,6 @@ export async function POST(request: Request) {
         VALUES (?, 'decision', DATE_ADD(NOW(), INTERVAL 3 DAY))`,
         [leadId],
       );
-
     } catch (error: any) {
       if (error.code === "ER_DUP_ENTRY") {
         return NextResponse.json(
@@ -115,7 +117,7 @@ export async function POST(request: Request) {
     }
 
     /* ---------- SEND EMAIL ---------- */
-    
+
     try {
       const info = await sendWelcomeEmail(email, name, leadId);
       console.log("EMAIL SENT:", info.messageId);
@@ -123,7 +125,20 @@ export async function POST(request: Request) {
       console.error("EMAIL ERROR:", emailError);
     }
 
-    return NextResponse.json({ message: "Lead przyjęty" }, { status: 200 });
+    const response = NextResponse.json(
+      { message: "Lead przyjęty" },
+      { status: 200 },
+    );
+
+    response.cookies.set("lead_access", "true", {
+      httpOnly: false,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24, // 24h
+    });
+
+    return response;
   } catch (error) {
     console.error(error);
 
