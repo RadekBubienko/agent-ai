@@ -1,4 +1,6 @@
 import VideoPlayer from "@/components/VideoPlayer";
+import ScrollCTA from "@/components/ScrollCTA";
+import ViewCounter from "@/components/ViewCounter";
 export const metadata = {
   robots: {
     index: false,
@@ -9,7 +11,7 @@ export default function VideoPage() {
   return (
     <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">
       <div className="max-w-3xl w-full text-center space-y-8">
-        <h1 className="text-3xl font-light">Pierwsze wprowadzenie</h1>
+        <h1 className="text-3xl font-light mt-12">Pierwsze wprowadzenie</h1>
         <p className="text-gray-300">
           Dziękujemy za zapis. Wysłaliśmy również materiały na Twój email.
         </p>
@@ -17,7 +19,7 @@ export default function VideoPage() {
           Obejrzyj krótkie wyjaśnienie technologii, o której właśnie
           przeczytałeś.
         </p>
-
+        <ViewCounter />
         <VideoPlayer />
 
         <p className="text-sm text-gray-500">🔊 Kliknij aby włączyć dźwięk</p>
@@ -58,6 +60,7 @@ export default function VideoPage() {
             </p>
           </div>
         </section>
+        <ScrollCTA />
       </div>
     </main>
   );
