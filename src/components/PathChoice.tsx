@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import LeadModal from "./LeadModal";
+import { useRouter } from "next/navigation";
 
 export default function PathChoice() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPath, setSelectedPath] = useState("education");
   const [success, setSuccess] = useState(false);
-
   const [choice, setChoice] = useState<string | null>(null);
+  const router = useRouter();
 
   return (
     <>
@@ -22,6 +23,7 @@ export default function PathChoice() {
             <button
               onClick={() => {
                 setSelectedPath("product");
+                setChoice("product");
                 setModalOpen(true);
               }}
               className="block w-full border p-5 rounded-lg hover:bg-white hover:text-black"
@@ -32,6 +34,7 @@ export default function PathChoice() {
             <button
               onClick={() => {
                 setSelectedPath("business");
+                setChoice("business");
                 setModalOpen(true);
               }}
               className="block w-full border p-5 rounded-lg hover:bg-white hover:text-black"
@@ -42,6 +45,7 @@ export default function PathChoice() {
             <button
               onClick={() => {
                 setSelectedPath("education");
+                setChoice("education");
                 setModalOpen(true);
               }}
               className="block w-full border p-5 rounded-lg hover:bg-white hover:text-black"
@@ -68,9 +72,10 @@ export default function PathChoice() {
       <LeadModal
         open={modalOpen}
         path={selectedPath}
-        onClose={() => {
+        onClose={() => setModalOpen(false)}
+        onSuccess={() => {
           setModalOpen(false);
-          setSuccess(true);
+          router.push("/video");
         }}
       />
     </>

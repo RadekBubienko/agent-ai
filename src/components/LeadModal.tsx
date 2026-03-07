@@ -6,9 +6,10 @@ type Props = {
   open: boolean;
   path: string;
   onClose: () => void;
+  onSuccess: () => void;
 };
 
-export default function LeadModal({ open, path, onClose }: Props) {
+export default function LeadModal({ open, path, onClose, onSuccess }: Props) {
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -51,7 +52,7 @@ export default function LeadModal({ open, path, onClose }: Props) {
         </h3>
 
         {/* FORM */}
-        <LeadForm path={path} onSuccess={onClose} />
+        <LeadForm path={path} onSuccess={onSuccess} />
       </div>
     </div>
   );

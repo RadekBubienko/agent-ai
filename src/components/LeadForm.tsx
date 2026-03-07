@@ -10,8 +10,9 @@ type Props = {
 export default function LeadForm({ path, onSuccess }: Props) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState("");
+
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
 
   const [errors, setErrors] = useState<{
     name?: string[];
@@ -19,6 +20,7 @@ export default function LeadForm({ path, onSuccess }: Props) {
   }>({});
 
   const inputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -30,39 +32,44 @@ export default function LeadForm({ path, onSuccess }: Props) {
 
     setLoading(true);
     setStatus("Wysyłanie...");
-
-    const res = await fetch("/api/lead", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        email,
-        path,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setErrors(data.error.fieldErrors || {});
-      setStatus("Błąd walidacji ❌");
-      setLoading(false);
-      return;
-    }
-
-    setStatus("Lead zapisany ✅");
-    setName("");
-    setEmail("");
     setErrors({});
-    setLoading(false);
 
-    if (onSuccess) {
-      onSuccess();
+    try {
+      const res = await fetch("/api/lead", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          path,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrors(data?.error?.fieldErrors || {});
+        setStatus("Błąd walidacji ❌");
+        setLoading(false);
+        return;
+      }
+
+      setStatus("Zapisano ✔");
+
+      setName("");
+      setEmail("");
+      setLoading(false);
+
+      if (onSuccess) {
+        onSuccess();
+      }
+
+    } catch (error) {
+      setStatus("Błąd połączenia ❌");
+      setLoading(false);
     }
-
-    setTimeout(() => {
-      window.location.href = "/video";
-    }, 800);
   };
 
   return (
@@ -71,16 +78,20 @@ export default function LeadForm({ path, onSuccess }: Props) {
       className="flex flex-col gap-4 w-full max-w-md"
     >
       <input
+        ref={inputRef}
         type="text"
         placeholder="Imię"
-        ref={inputRef}
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
-        className="p-3 rounded bg-gray-800 text-white"
+        className={`p-3 rounded bg-gray-800 text-white ${
+          errors.name ? "border border-red-500" : ""
+        }`}
       />
 
-      {errors.name && <p className="text-red-400 text-sm">{errors.name[0]}</p>}
+      {errors.name && (
+        <p className="text-red-400 text-sm">{errors.name[0]}</p>
+      )}
 
       <input
         type="email"
@@ -88,8 +99,14 @@ export default function LeadForm({ path, onSuccess }: Props) {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         required
-        className="p-3 rounded bg-gray-800 text-white"
+        className={`p-3 rounded bg-gray-800 text-white ${
+          errors.email ? "border border-red-500" : ""
+        }`}
       />
+
+      {errors.email && (
+        <p className="text-red-400 text-sm">{errors.email[0]}</p>
+      )}
 
       <button
         type="submit"
@@ -103,7 +120,9 @@ export default function LeadForm({ path, onSuccess }: Props) {
         {loading ? "Wysyłanie..." : "Zapisz się"}
       </button>
 
-      {status && <p className="text-sm text-gray-300">{status}</p>}
+      {status && (
+        <p className="text-sm text-gray-300 text-center">{status}</p>
+      )}
     </form>
   );
 }
