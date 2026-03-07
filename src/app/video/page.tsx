@@ -22,8 +22,8 @@ export default function VideoPage() {
         <ViewCounter />
         <VideoPlayer />
 
-        <p className="text-sm text-gray-500">🔊 Kliknij aby włączyć dźwięk</p>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-right mb-5 text-gray-400">🔊 Kliknij aby włączyć dźwięk</p>
+        <p className="text-sm text-gray-400">
           W międzyczasie sprawdź również wiadomość, którą wysłaliśmy na Twój
           email.
         </p>
