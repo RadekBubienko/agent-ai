@@ -1,34 +1,29 @@
 export default function Problem() {
   return (
-    <section 
-    id="problem"
-    className="py-24 px-6 max-w-6xl mx-auto text-center">
+    <section className="py-20 px-6 bg-white">
+        <div className="max-w-3xl mx-auto text-center space-y-6">
 
-      <h2 className="text-3xl font-light mb-12">
-        Większość rozwiązań zdrowotnych działa na zasadzie „dodawania”
-      </h2>
+          <h2 className="text-3xl font-light">
+            Dlaczego regeneracja z czasem zwalnia?
+          </h2>
 
-      <div className="grid md:grid-cols-3 gap-8 text-lg">
+          <p className="text-gray-600">
+            Organizm z wiekiem produkuje mniej kluczowych białek
+            odpowiedzialnych za regenerację tkanek.
+          </p>
 
-        <div className="p-6 border rounded-xl">
-          więcej suplementów
+          <ul className="space-y-2 text-gray-700">
+            <li>spadek energii</li>
+            <li>wolniejsza regeneracja</li>
+            <li>uczucie zmęczenia</li>
+          </ul>
+
+          <p className="text-gray-600">
+            To naturalny proces biologiczny.
+          </p>
+
         </div>
+      </section>
 
-        <div className="p-6 border rounded-xl">
-          więcej tabletek
-        </div>
-
-        <div className="p-6 border rounded-xl">
-          więcej składników
-        </div>
-
-      </div>
-
-      <p className="mt-12 text-xl max-w-2xl mx-auto">
-        A co jeśli problem nie leży w braku składników…
-        tylko w komunikacji organizmu?
-      </p>
-
-    </section>
   )
 }

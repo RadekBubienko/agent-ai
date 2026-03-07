@@ -1,28 +1,30 @@
 export default function Hero() {
   return (
-    <section className="min-h-screen flex items-center justify-center bg-black text-white px-6">
+    <section className="bg-[url(/img/hero-beach.jpg)] bg-cover min-h-[80vh] flex items-center justify-center bg-gradient-to-b from-white to-blue-50 px-6">
+        <div className="max-w-4xl text-center space-y-6">
 
-      <div className="max-w-3xl text-center space-y-6">
+          <h1 className="text-4xl mt-20 md:text-5xl font-light leading-tight">
+            Twoje ciało potrafi się regenerować.
+            <br />
+            Czasem potrzebuje tylko właściwego sygnału.
+          </h1>
 
-        <h1 className="text-4xl md:text-5xl font-light leading-tight">
-          A gdyby Twoje ciało potrzebowało nie kolejnego suplementu…
-          <br />
-          tylko właściwego sygnału?
-        </h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Istnieje technologia wykorzystująca światło ciała
+            do wspierania naturalnych procesów regeneracyjnych.
+          </p>
 
-        <p className="text-lg text-gray-300">
-          Organizm potrafi się regenerować.
-          Czasem potrzebuje tylko właściwej informacji.
-        </p>
+          <a
+            href="/jak-to-dziala"
+            className="inline-block mt-25 px-8 py-4 rounded-xl bg-blue-600 text-white text-lg hover:bg-blue-700 transition"
+          >
+            Zobacz jak działa sygnał
+          </a>
 
-        <a
-          href="#problem"
-          className="inline-block mt-6 bg-white text-black px-8 py-4 rounded-lg font-medium hover:opacity-90"
-        >
-          Sprawdź jak to działa
-        </a>
-
-      </div>
-    </section>
+          <p className="text-sm text-gray-500">
+            krótkie wyjaśnienie (3 minuty)
+          </p>
+        </div>
+      </section>
   )
 }

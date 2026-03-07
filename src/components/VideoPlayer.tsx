@@ -37,7 +37,6 @@ export default function VideoPlayer() {
     </div>
       <div className="relative aspect-video rounded-xl mt-1 overflow-hidden">
 
-
         <video
           ref={videoRef}
           autoPlay
@@ -47,7 +46,7 @@ export default function VideoPlayer() {
           onTimeUpdate={handleTimeUpdate}
           className="w-full h-full"
         >
-          <source src="/video/lifewave-intro.mp4" type="video/mp4" />
+          <source src="/video/intro.mp4" type="video/mp4" />
         </video>
 
         {showCTA && (
