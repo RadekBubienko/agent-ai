@@ -32,7 +32,7 @@ export default function SignalExplanation() {
             controls
             className="w-full h-full"
           >
-            <source src="/video/jak-to-dziala-LW.mp4" type="video/mp4" />
+            <source src="/video/jak-to-dziala.mp4" type="video/mp4" />
           </video>
         </div>
 
