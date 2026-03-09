@@ -1,8 +1,15 @@
 import OpenAI from "openai"
 
+const apiKey = process.env.OPENAI_API_KEY
+
+if(!apiKey){
+  console.log("OPENAI_API_KEY missing")
+}
+
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey
 })
+
 
 export async function llmScore(text:string){
 
