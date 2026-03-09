@@ -18,7 +18,7 @@ export async function sendWelcomeEmail(
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   return transporter.sendMail({
-    from: '"Green Foods" <info@probalancelife.pl>',
+    from: '"Probalancelife" <info@probalancelife.pl>',
     to,
     subject: "Dziękujemy za rejestrację 🌿",
     html: `
@@ -36,7 +36,7 @@ export async function sendWelcomeEmail(
 
 export async function sendEducationEmail(to: string, name: string) {
   return transporter.sendMail({
-    from: '"Green Foods" <biuro@multitraffic.pl>',
+    from: '"Probalancelife" <info@probalancelife.pl>',
     to,
     subject: "Dlaczego to działa?",
     html: `
@@ -84,7 +84,7 @@ export async function sendBusinessAlert(name: string, email: string) {
 
 export async function sendClientAlert(name: string, email: string) {
   return transporter.sendMail({
-    from: '"Green Foods Alert" <info@probalancelife.pl>',
+    from: '"Probalancelife Alert" <info@probalancelife.pl>',
     to: "biuro@multitraffic.pl",
     subject: "🟢 Nowy lead produktowy",
     html: `

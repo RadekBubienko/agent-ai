@@ -1,31 +1,21 @@
+import { fetchWebsite } from "./fetchWebsite"
+import { extractText } from "./extractText"
+import { llmScore } from "@/lib/ai/llmScore"
+
 export async function analyzeWebsite(website:string){
 
   if(!website){
     return { fit:10, intent:5 }
   }
 
-  const keywords = [
-    "health",
-    "wellness",
-    "fitness",
-    "biohacking",
-    "supplements",
-    "coaching"
-  ]
+  const html = await fetchWebsite(website)
 
-  let fit = 20
-  let intent = 10
+  const text = extractText(html)
 
-  const text = website.toLowerCase()
+  const ai = await llmScore(text)
 
-  for(const k of keywords){
-
-    if(text.includes(k)){
-      fit += 10
-      intent += 5
-    }
-
-  }
+  const fit = Math.round(ai.mlm_probability * 0.6)
+  const intent = Math.round(ai.mlm_probability * 0.4)
 
   return { fit, intent }
 
