@@ -1,6 +1,6 @@
 export default function Product() {
   return (
-    <section className="py-24 px-6 max-w-5xl mx-auto text-center space-y-8">
+    <section className="py-24 bg-white px-6 max-w-5xl mx-auto text-center space-y-8">
 
       <h2 className="text-3xl font-light">
         Fototerapia opracowana przez Davida Schmidta

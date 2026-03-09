@@ -30,7 +30,11 @@ export default function SignalExplanation() {
             muted
             playsInline
             controls
+            preload="metadata"
             className="w-full h-full"
+           
+  
+ 
           >
             <source src="/media/jak-to-dziala.mp4" type="video/mp4" />
           </video>

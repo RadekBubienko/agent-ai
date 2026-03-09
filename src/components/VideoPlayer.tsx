@@ -43,6 +43,7 @@ export default function VideoPlayer() {
           muted
           playsInline
           controls
+          preload="metadata"
           onTimeUpdate={handleTimeUpdate}
           className="w-full h-full"
         >
