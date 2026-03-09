@@ -50,14 +50,25 @@ ${text}
 
   const output = response.output_text?.trim()
 
-  try{
-    return JSON.parse(output || "")
-  }catch{
+try{
 
-    console.log("AI parse error:", output)
+  const result = JSON.parse(output || "")
 
-    return { mlm_probability: 30 }
+  let score = result.mlm_probability
 
+  // jeśli model zwróci 0-1
+  if(score <= 1){
+    score = Math.round(score * 100)
   }
+
+  return { mlm_probability: score }
+
+}catch{
+
+  console.log("AI parse error:", output)
+
+  return { mlm_probability: 30 }
+
+}
 
 }
