@@ -46,7 +46,7 @@ export default function VideoPlayer() {
           onTimeUpdate={handleTimeUpdate}
           className="w-full h-full"
         >
-          <source src="/video/intro.mp4" type="video/mp4" />
+          <source src="/media/intro.mp4" type="video/mp4" />
         </video>
       </div>
       {showCTA && (
