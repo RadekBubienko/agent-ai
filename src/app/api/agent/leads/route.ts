@@ -5,10 +5,9 @@ export async function GET(req:Request){
 
   const { searchParams } = new URL(req.url)
 
-  const source = searchParams.get("source")
   const segment = searchParams.get("segment")
 
-  const leads = await getAgentLeads(source,segment)
+  const leads = await getAgentLeads(segment)
 
   return NextResponse.json(leads)
 

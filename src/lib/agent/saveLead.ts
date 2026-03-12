@@ -18,16 +18,19 @@ export async function saveLead(db:any, lead:any) {
   }
 
   const [result] = await db.query(
-    `INSERT INTO leads
-    (name,email,website,source,fit_score,intent_score,engagement_score,total_score,segment)
-    VALUES (?,?,?,?,0,0,0,0,'cold')`,
-    [
-      lead.name,
-      lead.email,
-      lead.website,
-      lead.source
-    ]
-  )
+`
+INSERT INTO leads
+(name,email,website,source,platform,fit_score,intent_score,engagement_score,total_score,segment)
+VALUES (?,?,?,?,?,0,0,0,0,'cold')
+`,
+[
+lead.name,
+lead.email || null,
+lead.website,
+lead.source,
+lead.platform || null
+]
+)
 
   const leadId = result.insertId
 

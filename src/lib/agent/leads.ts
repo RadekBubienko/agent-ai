@@ -1,19 +1,24 @@
 import { db } from "@/lib/db"
 
-export async function getAgentLeads(source?:string|null,segment?:string|null){
+export async function getAgentLeads(segment?:string|null){
 
   let query = `
-    SELECT id,name,email,website,source,segment,total_score,created_at
+    SELECT
+      id,
+      name,
+      email,
+      website,
+      source,
+      platform,
+      segment,
+      total_score,
+      created_at,
+      status
     FROM leads
-    WHERE 1=1
+    WHERE source='agent'
   `
 
   const params:any[] = []
-
-  if(source){
-    query += " AND source = ?"
-    params.push(source)
-  }
 
   if(segment){
     query += " AND segment = ?"

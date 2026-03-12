@@ -79,10 +79,33 @@ export default function AgentTaskForm() {
     setKeywordInput("");
   }
 
-  function submitTask() {
-    console.log("TASK CONFIG:", form);
-    alert("Task saved. Check console.");
+  async function submitTask() {
+
+  try {
+
+    const res = await fetch("/api/agent/start-task",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json"
+      },
+      body: JSON.stringify(form)
+    })
+
+    const data = await res.json()
+
+    console.log("Agent started:", data)
+
+    alert("Agent uruchomiony")
+
+  } catch(err){
+
+    console.error("Agent error:", err)
+
+    alert("Błąd uruchamiania agenta")
+
   }
+
+}
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white shadow rounded-xl">
