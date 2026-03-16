@@ -1,7 +1,9 @@
 import { TaskConfig } from "@/types/agent"
 import { crawlGoogle } from "./sources/google"
+import { crawlInstagram } from "./sources/instagram"
+import { crawlFacebook } from "./sources/facebook"
+
 // przyszłe źródła
-// import { crawlInstagram } from "./sources/instagram"
 // import { crawlLinkedIn } from "./sources/linkedin"
 // import { crawlMaps } from "./sources/maps"
 
@@ -31,9 +33,13 @@ export async function startAgentJob(
 
     // przyszłe źródła
 
-    // if (config.sources.includes("instagram")) {
-    //   jobs.push(crawlInstagram(db, config))
-    // }
+    if (config.sources.includes("instagram")) {
+       jobs.push(crawlInstagram(db, config))
+     }
+
+    if (config.sources.includes("facebook")) {
+      jobs.push(crawlFacebook(db, config))
+    }
 
     // if (config.sources.includes("linkedin")) {
     //   jobs.push(crawlLinkedIn(db, config))

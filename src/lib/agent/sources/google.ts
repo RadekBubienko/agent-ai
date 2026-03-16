@@ -1,42 +1,61 @@
-import { email } from "zod"
-import { saveLead } from "../saveLead"
-import { TaskConfig } from "@/types/agent"
+import { saveLead } from "../saveLead";
+import { TaskConfig } from "@/types/agent";
+import { fetchWebsite } from "@/lib/ai/fetchWebsite";
+import { findEmails } from "@/lib/ai/findEmails";
 
 export async function crawlGoogle(db: any, config: TaskConfig) {
+  console.log("Search crawler started");
+  console.log("Task config:", config);
 
-  console.log("Search crawler started")
-  console.log("Task config:", config)
+  const limit = config.limit || 50;
+  let leadsSaved = 0;
 
-  const limit = config.limit || 50
-  let leadsSaved = 0
+  const queries = buildQueries(config);
 
-  const queries = buildQueries(config)
-
-  console.log("Generated queries:", queries)
+  console.log("Generated queries:", queries);
 
   for (const query of queries) {
+    console.log("Search query:", query);
 
-    console.log("Search query:", query)
+    const url = "https://duckduckgo.com/html/?q=" + encodeURIComponent(query);
 
-    const url =
-      "https://duckduckgo.com/html/?q=" +
-      encodeURIComponent(query)
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+      },
+    });
 
-    const res = await fetch(url)
+    const html = await res.text();
 
-    const html = await res.text()
+    console.log("HTML size:", html.length);
 
-    console.log("HTML size:", html.length)
+    const links = extractLinks(html);
 
-    const links = extractLinks(html)
-
-    console.log("Links found:", links.length)
+    console.log("Links found:", links.length);
 
     for (const link of links) {
-
       if (leadsSaved >= limit) {
-        console.log("Limit reached:", limit)
-        return
+        console.log("Limit reached:", limit);
+        return;
+      }
+
+      // ---------------------------------
+      // ANALIZA STRONY I SZUKANIE EMAILA
+      // ---------------------------------
+
+      const htmlPage = await fetchWebsite(link);
+
+      let email: string | null = null;
+
+      if (htmlPage) {
+        const emails = findEmails(htmlPage);
+
+        console.log("Emails found:", emails);
+
+        if (emails.length > 0) {
+          email = emails[0];
+        }
       }
 
       const lead = {
@@ -44,83 +63,67 @@ export async function crawlGoogle(db: any, config: TaskConfig) {
         website: link,
         source: "agent",
         platform: "search",
-        email: null,
-      }
+        email,
+      };
 
-      console.log("Saving lead:", lead)
+      console.log("Saving lead:", lead);
 
-      await saveLead(db, lead)
+      await saveLead(db, lead);
 
-      leadsSaved++
-
+      leadsSaved++;
     }
 
-    await sleep(2000)
-
+    await sleep(2000);
   }
-
 }
 
 /* ---------------- HELPERS ---------------- */
 
 function buildQueries(config: TaskConfig): string[] {
+  const queries: string[] = [];
 
-  const queries: string[] = []
+  const keywords = config.industry?.keywords || [];
 
-  const keywords = config.industry?.keywords || []
-
-  const city = config.geo?.city
-  const country = config.geo?.country
+  const city = config.geo?.city;
+  const country = config.geo?.country;
 
   for (const keyword of keywords) {
+    if (city) queries.push(`${keyword} ${city}`);
+    if (country) queries.push(`${keyword} ${country}`);
 
-    if (city) queries.push(`${keyword} ${city}`)
-    if (country) queries.push(`${keyword} ${country}`)
-
-    queries.push(keyword)
-
+    queries.push(keyword);
   }
 
-  return queries
-
+  return queries;
 }
 
 function extractLinks(html: string): string[] {
+  const links: string[] = [];
 
-  const links: string[] = []
+  const regex = /uddg=([^&"]+)/g;
 
-  const regex = /uddg=([^&"]+)/g
-
-  let match
+  let match;
 
   while ((match = regex.exec(html)) !== null) {
+    const url = decodeURIComponent(match[1]);
 
-    const url = decodeURIComponent(match[1])
-
-    if (
-      url.startsWith("http") &&
-      !url.includes("duckduckgo")
-    ) {
-      links.push(url)
+    if (url.startsWith("http") && !url.includes("duckduckgo")) {
+      links.push(url);
     }
-
   }
 
-  return [...new Set(links)]
-
+  return [...new Set(links)];
 }
 
 function extractDomain(url: string): string {
-
   try {
-    const u = new URL(url)
-    return u.hostname
+    const u = new URL(url);
+    return u.hostname;
   } catch {
-    return url
+    return url;
   }
-
 }
 
 function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
