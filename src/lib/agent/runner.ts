@@ -1,7 +1,7 @@
 import { TaskConfig } from "@/types/agent"
 import { crawlGoogle } from "./sources/google"
 import { crawlInstagram } from "./sources/instagram"
-import { crawlFacebook } from "./sources/facebook"
+import { crawlFacebook } from "./sources/facebook_public"
 
 // przyszłe źródła
 // import { crawlLinkedIn } from "./sources/linkedin"
