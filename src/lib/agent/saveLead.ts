@@ -1,6 +1,24 @@
 import { findDuplicate } from "./dedup";
 import { scoreLead } from "@/lib/ai/leadScoring";
 
+function normalizeDomain(url?: string | null): string | null {
+  if (!url) return null
+
+  try {
+    const u = new URL(url.startsWith("http") ? url : "https://" + url)
+
+    let host = u.hostname.toLowerCase()
+
+    if (host.startsWith("www.")) {
+      host = host.replace("www.", "")
+    }
+
+    return host
+  } catch {
+    return null
+  }
+}
+
 export async function saveLead(db:any, lead:any) {
 
   const duplicate = await findDuplicate(db, lead)
@@ -16,19 +34,24 @@ export async function saveLead(db:any, lead:any) {
 
     return duplicate
   }
-
+  
+  const domain =
+  normalizeDomain(lead.website) ||
+  (lead.email ? lead.email.split("@")[1] : null)
+  
   const [result] = await db.query(
 `
 INSERT INTO leads
-(name,email,website,source,platform,fit_score,intent_score,engagement_score,total_score,segment)
-VALUES (?,?,?,?,?,0,0,0,0,'cold')
+(name,email,website,domain,source,platform,fit_score,intent_score,engagement_score,total_score,segment)
+VALUES (?,?,?,?,?, ?,0,0,0,0,'cold')
 `,
 [
-lead.name,
-lead.email || null,
-lead.website,
-lead.source,
-lead.platform || null
+  lead.name,
+  lead.email || null,
+  lead.website,
+  domain,
+  lead.source,
+  lead.platform || null
 ]
 )
 
