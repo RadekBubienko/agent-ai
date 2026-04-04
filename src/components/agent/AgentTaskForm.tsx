@@ -249,6 +249,7 @@ export default function AgentTaskForm() {
           {[
             "google",
             "facebook",
+            "facebook_comments",
             "linkedin",
             "instagram",
             "directories",
