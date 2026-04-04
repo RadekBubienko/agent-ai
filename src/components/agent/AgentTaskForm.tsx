@@ -262,7 +262,7 @@ export default function AgentTaskForm() {
                 checked={form.sources.includes(src)}
                 onChange={() => toggleArray("sources", src)}
               />{" "}
-              {src}
+              {src === "facebook_comments" ? "Facebook (komentarze)" : src}
             </label>
           ))}
 
