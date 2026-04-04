@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { ResultSetHeader } from "mysql2/promise";
 import { db } from "@/lib/db";
 
 export async function PATCH(
@@ -12,14 +13,14 @@ export async function PATCH(
   }
 
   const { id } = await context.params;
-  const { status } = await req.json();
+  const { status } = (await req.json()) as { status: string };
 
   console.log("Updating ID:", id);
   console.log("New status:", status);
 
   try {
     let query = "UPDATE leads SET status = ?";
-    let values: any[] = [status];
+    const values: Array<string | number> = [status];
 
     if (status === "contacted") {
       query += ", contacted_at = NOW()";
@@ -28,7 +29,7 @@ export async function PATCH(
     query += " WHERE id = ?";
     values.push(id);
 
-    const [result]: any = await db.query(query, values);
+    const [result] = await db.query<ResultSetHeader>(query, values);
 
     console.log("Affected rows:", result.affectedRows);
 

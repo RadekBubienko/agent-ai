@@ -20,25 +20,32 @@ export default function AgentLeadsPage() {
   const [source, setSource] = useState("");
   const [segment, setSegment] = useState("");
 
-  async function loadLeads() {
-    const params = new URLSearchParams();
-
-    if (source) params.append("source", source);
-    if (segment) params.append("segment", segment);
-
-    const res = await fetch("/api/agent/leads?" + params.toString());
-
-    const data = await res.json();
-
-    setLeads(data);
-  }
-
   useEffect(() => {
-    loadLeads();
-  }, []);
+    let active = true;
 
-  useEffect(() => {
-    loadLeads();
+    async function loadLeads() {
+      const params = new URLSearchParams();
+
+      if (source) params.append("source", source);
+      if (segment) params.append("segment", segment);
+
+      const query = params.toString();
+      const res = await fetch(
+        query ? `/api/agent/leads?${query}` : "/api/agent/leads",
+      );
+      if (!res.ok || !active) return;
+
+      const data: Lead[] = await res.json();
+      if (!active) return;
+
+      setLeads(data);
+    }
+
+    void loadLeads();
+
+    return () => {
+      active = false;
+    };
   }, [source, segment]);
 
   return (

@@ -1,70 +1,43 @@
-import { TaskConfig } from "@/types/agent";
+import { db } from "@/lib/db";
+import type { DbClient, TaskConfig } from "@/types/agent";
+import { crawlFacebookComments } from "./sources/facebook_comments";
+import { crawlFacebook } from "./sources/facebook_public";
 import { crawlGoogle } from "./sources/google";
 import { crawlInstagram } from "./sources/instagram";
-import { crawlFacebook } from "./sources/facebook_public";
-import { crawlFacebookComments } from "./sources/facebook_comments";
 
-// przyszłe źródła
-// import { crawlLinkedIn } from "./sources/linkedin"
-// import { crawlMaps } from "./sources/maps"
+type SourceRunner = (db: DbClient, config: TaskConfig) => Promise<void>;
 
-import { db } from "@/lib/db";
+const sourceRunners: Record<string, SourceRunner> = {
+  google: crawlGoogle,
+  instagram: crawlInstagram,
+  facebook: crawlFacebook,
+  facebook_comments: crawlFacebookComments,
+};
+
+async function updateTaskStatus(taskId: string, status: string) {
+  await db.query(
+    `UPDATE agent_tasks
+     SET status=?
+     WHERE id=?`,
+    [status, taskId],
+  );
+}
 
 export async function startAgentJob(taskId: string, config: TaskConfig) {
   console.log("Agent started:", taskId);
 
   try {
-    await db.query(
-      `UPDATE agent_tasks
-       SET status='running'
-       WHERE id=?`,
-      [taskId],
-    );
+    await updateTaskStatus(taskId, "running");
 
-    const jobs: Promise<any>[] = [];
-
-    if (config.sources.includes("google")) {
-      jobs.push(crawlGoogle(db, config));
-    }
-
-    // przyszłe źródła
-
-    if (config.sources.includes("instagram")) {
-      jobs.push(crawlInstagram(db, config));
-    }
-
-    if (config.sources.includes("facebook")) {
-      jobs.push(crawlFacebook(db, config));
-    }
-
-    if (config.sources.includes("facebook_comments")) {
-      jobs.push(crawlFacebookComments(db, config));
-    }
-
-    // if (config.sources.includes("linkedin")) {
-    //   jobs.push(crawlLinkedIn(db, config))
-    // }
-
-    // if (config.sources.includes("maps")) {
-    //   jobs.push(crawlMaps(db, config))
-    // }
+    const jobs = config.sources
+      .map((source) => sourceRunners[source])
+      .filter((runner): runner is SourceRunner => Boolean(runner))
+      .map((runner) => runner(db, config));
 
     await Promise.all(jobs);
-
-    await db.query(
-      `UPDATE agent_tasks
-       SET status='finished'
-       WHERE id=?`,
-      [taskId],
-    );
+    await updateTaskStatus(taskId, "finished");
   } catch (err) {
     console.error("Agent error:", err);
-
-    await db.query(
-      `UPDATE agent_tasks
-       SET status='error'
-       WHERE id=?`,
-      [taskId],
-    );
+    await updateTaskStatus(taskId, "error");
   }
 }

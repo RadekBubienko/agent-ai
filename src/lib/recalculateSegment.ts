@@ -1,73 +1,103 @@
-import { db } from "@/lib/db"
-import { sendBusinessAlert } from "@/lib/mailer"
-import { sendClientAlert } from "@/lib/mailer"
+import type { RowDataPacket } from "mysql2/promise";
+import { db } from "@/lib/db";
+import { sendBusinessAlert, sendClientAlert } from "@/lib/mailer";
+
+type LeadSegment = "neutral" | "engaged" | "business_intent" | "client_intent";
+
+type LeadSegmentRow = RowDataPacket & {
+  segment: string;
+};
+
+type LeadScoreRow = RowDataPacket & {
+  total: number;
+  businessScore: number;
+  productScore: number;
+};
+
+type LeadContactRow = RowDataPacket & {
+  name: string;
+  email: string;
+};
+
+function resolveSegment(
+  totalScore: number,
+  businessScore: number,
+  productScore: number,
+): LeadSegment {
+  if (businessScore >= 30) return "business_intent";
+  if (productScore >= 20) return "client_intent";
+  if (totalScore >= 10) return "engaged";
+
+  return "neutral";
+}
+
+async function sendSegmentAlert(segment: LeadSegment, leadId: number) {
+  if (segment !== "business_intent" && segment !== "client_intent") {
+    return;
+  }
+
+  const [leadRows] = await db.query<LeadContactRow[]>(
+    `SELECT name, email FROM leads WHERE id = ?`,
+    [leadId],
+  );
+
+  const lead = leadRows[0];
+  if (!lead) return;
+
+  if (segment === "business_intent") {
+    await sendBusinessAlert(lead.name, lead.email);
+    return;
+  }
+
+  await sendClientAlert(lead.name, lead.email);
+}
 
 export async function recalculateSegment(leadId: number) {
-
-  // 1️⃣ pobierz aktualny segment
-  const [currentRows]: any = await db.query(
+  const [segmentRows] = await db.query<LeadSegmentRow[]>(
     `SELECT segment FROM leads WHERE id = ?`,
-    [leadId]
-  )
+    [leadId],
+  );
+  const currentSegment = (segmentRows[0]?.segment ?? "neutral") as LeadSegment;
 
-  const currentSegment = currentRows[0]?.segment ?? "neutral"
-
-  // 2️⃣ przelicz eventy
-  const [rows]: any = await db.query(
+  const [scoreRows] = await db.query<LeadScoreRow[]>(
     `
     SELECT
       COALESCE(SUM(event_value),0) as total,
-
-      COALESCE(SUM(CASE 
-        WHEN event_type = 'business_interest_click' 
-        THEN event_value ELSE 0 END),0) as businessScore,
-
-      COALESCE(SUM(CASE 
-        WHEN event_type = 'product_interest_click' 
-        THEN event_value ELSE 0 END),0) as productScore
-
+      COALESCE(
+        SUM(
+          CASE
+            WHEN event_type = 'business_interest_click' THEN event_value
+            ELSE 0
+          END
+        ),
+        0
+      ) as businessScore,
+      COALESCE(
+        SUM(
+          CASE
+            WHEN event_type = 'product_interest_click' THEN event_value
+            ELSE 0
+          END
+        ),
+        0
+      ) as productScore
     FROM lead_events
     WHERE lead_id = ?
     `,
-    [leadId]
-  )
+    [leadId],
+  );
 
-  const totalScore = Number(rows[0].total)
-  const businessScore = Number(rows[0].businessScore)
-  const productScore = Number(rows[0].productScore)
+  const totalScore = Number(scoreRows[0]?.total ?? 0);
+  const businessScore = Number(scoreRows[0]?.businessScore ?? 0);
+  const productScore = Number(scoreRows[0]?.productScore ?? 0);
+  const nextSegment = resolveSegment(totalScore, businessScore, productScore);
 
-  let newSegment = "neutral"
-
-  if (businessScore >= 30) {
-    newSegment = "business_intent"
-  } else if (productScore >= 20) {
-    newSegment = "client_intent"
-  } else if (totalScore >= 10) {
-    newSegment = "engaged"
-  }
-
-  // 3️⃣ update segment + score
   await db.query(
     `UPDATE leads SET total_score = ?, segment = ? WHERE id = ?`,
-    [totalScore, newSegment, leadId]
-  )
+    [totalScore, nextSegment, leadId],
+  );
 
-  // 4️⃣ jeśli zmiana na business_intent lub client_intent → alert
-  if (currentSegment !== newSegment) {
-
-  const [leadRows]: any = await db.query(
-    `SELECT name, email FROM leads WHERE id = ?`,
-    [leadId]
-  )
-
-  const lead = leadRows[0]
-
-  if (newSegment === "business_intent") {
-    await sendBusinessAlert(lead.name, lead.email)
+  if (currentSegment !== nextSegment) {
+    await sendSegmentAlert(nextSegment, leadId);
   }
-
-  if (newSegment === "client_intent") {
-    await sendClientAlert(lead.name, lead.email)
-  }
-}
 }

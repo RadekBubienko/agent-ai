@@ -1,9 +1,9 @@
-import { saveLead } from "../saveLead";
-import { TaskConfig } from "@/types/agent";
 import { fetchWebsite } from "@/lib/ai/fetchWebsite";
 import { findEmails } from "@/lib/ai/findEmails";
+import type { DbClient, TaskConfig } from "@/types/agent";
+import { saveLead } from "../saveLead";
 
-export async function crawlGoogle(db: any, config: TaskConfig) {
+export async function crawlGoogle(db: DbClient, config: TaskConfig) {
   console.log("Search crawler started");
   console.log("Task config:", config);
 
@@ -40,12 +40,7 @@ export async function crawlGoogle(db: any, config: TaskConfig) {
         return;
       }
 
-      // ---------------------------------
-      // ANALIZA STRONY I SZUKANIE EMAILA
-      // ---------------------------------
-
       const htmlPage = await fetchWebsite(link);
-
       let email: string | null = null;
 
       if (htmlPage) {
@@ -77,13 +72,9 @@ export async function crawlGoogle(db: any, config: TaskConfig) {
   }
 }
 
-/* ---------------- HELPERS ---------------- */
-
 function buildQueries(config: TaskConfig): string[] {
   const queries: string[] = [];
-
   const keywords = config.industry?.keywords || [];
-
   const city = config.geo?.city;
   const country = config.geo?.country;
 
@@ -99,10 +90,8 @@ function buildQueries(config: TaskConfig): string[] {
 
 function extractLinks(html: string): string[] {
   const links: string[] = [];
-
   const regex = /uddg=([^&"]+)/g;
-
-  let match;
+  let match: RegExpExecArray | null;
 
   while ((match = regex.exec(html)) !== null) {
     const url = decodeURIComponent(match[1]);

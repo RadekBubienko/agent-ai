@@ -1,34 +1,29 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
+import { useEffect, useState } from "react";
 
 export default function ViewCounter() {
-
-  const [views, setViews] = useState<number | null>(null)
+  const [views, setViews] = useState<number | null>(null);
 
   useEffect(() => {
-
-    const updateViews = async () => {
-
+    async function updateViews() {
       const res = await fetch("/api/video-view", {
-        method: "POST"
-      })
+        method: "POST",
+      });
 
-      const data = await res.json()
-
-      setViews(data.views)
-
+      const data: { views: number } = await res.json();
+      setViews(data.views);
     }
 
-    updateViews()
+    void updateViews();
+  }, []);
 
-  }, [])
-
-  if (!views) return null
+  if (!views) return null;
 
   return (
     <div className="text-sm text-gray-400">
-      Ten materiał obejrzało już <span className="text-white font-semibold">{views}</span> osób
+      Ten materiał obejrzało już{" "}
+      <span className="text-white font-semibold">{views}</span> osób
     </div>
-  )
+  );
 }

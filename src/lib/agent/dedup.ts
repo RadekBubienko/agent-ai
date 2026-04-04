@@ -1,3 +1,10 @@
+import type { RowDataPacket } from "mysql2/promise"
+import type { DbClient, LeadInput } from "@/types/agent"
+
+type DuplicateLeadRow = RowDataPacket & {
+  id: number
+}
+
 function normalizeDomain(url?: string | null): string | null {
   if (!url) return null
 
@@ -16,11 +23,9 @@ function normalizeDomain(url?: string | null): string | null {
   }
 }
 
-export async function findDuplicate(db: any, lead: any) {
-
-  // 1️⃣ EMAIL (najsilniejszy sygnał)
+export async function findDuplicate(db: DbClient, lead: LeadInput) {
   if (lead.email) {
-    const [rows] = await db.query(
+    const [rows] = await db.query<DuplicateLeadRow[]>(
       "SELECT id FROM leads WHERE email = ? LIMIT 1",
       [lead.email]
     )
@@ -28,23 +33,19 @@ export async function findDuplicate(db: any, lead: any) {
     if (rows.length) return rows[0].id
   }
 
-  // 2️⃣ DOMAIN (kluczowy dla crawlerów)
-const domain = normalizeDomain(lead.website)
+  const domain = normalizeDomain(lead.website)
 
-if (domain) {
+  if (domain) {
+    const [rows] = await db.query<DuplicateLeadRow[]>(
+      "SELECT id FROM leads WHERE domain = ? LIMIT 1",
+      [domain]
+    )
 
-  const [rows] = await db.query(
-    "SELECT id FROM leads WHERE domain = ? LIMIT 1",
-    [domain]
-  )
+    if (rows.length) return rows[0].id
+  }
 
-  if (rows.length) return rows[0].id
-}
-
-  // 3️⃣ NAME (fallback – słabszy sygnał)
   if (lead.name) {
-
-    const [rows] = await db.query(
+    const [rows] = await db.query<DuplicateLeadRow[]>(
       `
       SELECT id FROM leads
       WHERE name = ?

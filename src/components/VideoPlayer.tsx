@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 
 export default function VideoPlayer() {
@@ -9,9 +10,7 @@ export default function VideoPlayer() {
 
   const handleTimeUpdate = () => {
     const video = videoRef.current;
-    if (!video) return;
-
-    if (!video.duration) return;
+    if (!video || !video.duration) return;
 
     const percent = video.currentTime / video.duration;
 
@@ -36,6 +35,7 @@ export default function VideoPlayer() {
           {Math.floor(progress)}%
         </div>
       </div>
+
       <div className="relative aspect-video rounded-xl mt-1 overflow-hidden">
         <video
           ref={videoRef}
@@ -49,25 +49,18 @@ export default function VideoPlayer() {
         >
           <source src="/media/intro.mp4" type="video/mp4" />
         </video>
+
+        {showCTA && (
+          <div className="absolute inset-0 flex items-end justify-center pb-10 pointer-events-none">
+            <Link
+              href="/"
+              className="pointer-events-auto bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg"
+            >
+              Dowiedz się więcej
+            </Link>
+          </div>
+        )}
       </div>
-      {showCTA && (
-        <div className="
-        absolute
-        inset-0 
-        flex 
-        items-end 
-        justify-center 
-        pb-10 
-        pointer-events-none
-        ">
-          <a
-            href="/"
-            className="pointer-events-auto bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg"
-          >
-            Dowiedz się więcej
-          </a>
-        </div>
-      )}
     </>
   );
 }

@@ -23,20 +23,29 @@ function statusColor(status: string) {
 export default function AgentDashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  async function loadTasks() {
-    const res = await fetch("/api/agent/tasks");
-
-    const data = await res.json();
-
-    setTasks(data);
-  }
-
   useEffect(() => {
-    loadTasks();
+    let active = true;
 
-    const interval = setInterval(loadTasks, 5000);
+    async function loadTasks() {
+      const res = await fetch("/api/agent/tasks");
+      if (!res.ok || !active) return;
 
-    return () => clearInterval(interval);
+      const data: Task[] = await res.json();
+      if (!active) return;
+
+      setTasks(data);
+    }
+
+    void loadTasks();
+
+    const interval = window.setInterval(() => {
+      void loadTasks();
+    }, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   return (

@@ -1,8 +1,7 @@
+import type { DbClient, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
-import { TaskConfig } from "@/types/agent"
 
-export async function crawlInstagram(db: any, config: TaskConfig) {
-
+export async function crawlInstagram(db: DbClient, config: TaskConfig) {
   console.log("Instagram crawler started")
 
   const limit = config.limit || 50
@@ -13,30 +12,26 @@ export async function crawlInstagram(db: any, config: TaskConfig) {
   console.log("Hashtags:", hashtags)
 
   for (const hashtag of hashtags) {
-
     console.log("Searching hashtag:", hashtag)
 
     const url =
       "https://www.instagram.com/explore/tags/" +
-      encodeURIComponent(hashtag) + "/"
+      encodeURIComponent(hashtag) +
+      "/"
 
     try {
-
       const res = await fetch(url, {
         headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        },
       })
 
       const html = await res.text()
-
       const profiles = extractProfiles(html)
 
       console.log("Profiles found:", profiles.length)
 
       for (const profile of profiles) {
-
         if (leadsSaved >= limit) {
           console.log("Instagram limit reached:", limit)
           return
@@ -47,7 +42,7 @@ export async function crawlInstagram(db: any, config: TaskConfig) {
           website: `https://instagram.com/${profile}`,
           source: "agent",
           platform: "instagram",
-          email: null
+          email: null,
         }
 
         console.log("Saving lead:", lead)
@@ -55,55 +50,33 @@ export async function crawlInstagram(db: any, config: TaskConfig) {
         await saveLead(db, lead)
 
         leadsSaved++
-
       }
-
-    } catch (err) {
-
+    } catch {
       console.log("Instagram fetch failed:", hashtag)
-
     }
-
   }
-
 }
 
-/* ---------------- HELPERS ---------------- */
-
 function buildHashtags(config: TaskConfig): string[] {
-
   const tags: string[] = []
-
   const keywords = config.industry?.keywords || []
 
   for (const keyword of keywords) {
-
-    const clean = keyword
-      .toLowerCase()
-      .replace(/\s+/g, "")
-
+    const clean = keyword.toLowerCase().replace(/\s+/g, "")
     tags.push(clean)
-
   }
 
   return tags
-
 }
 
 function extractProfiles(html: string): string[] {
-
   const profiles: string[] = []
-
   const regex = /"username":"([^"]+)"/g
-
-  let match
+  let match: RegExpExecArray | null
 
   while ((match = regex.exec(html)) !== null) {
-
     profiles.push(match[1])
-
   }
 
   return [...new Set(profiles)]
-
 }

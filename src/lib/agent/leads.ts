@@ -1,7 +1,20 @@
+import type { RowDataPacket } from "mysql2/promise"
 import { db } from "@/lib/db"
 
-export async function getAgentLeads(segment?:string|null){
+type AgentLeadRow = RowDataPacket & {
+  id: number
+  name: string
+  email: string | null
+  website: string | null
+  source: string
+  platform: string | null
+  segment: string
+  total_score: number
+  created_at: string
+  status: string
+}
 
+export async function getAgentLeads(segment?: string | null) {
   let query = `
     SELECT
       id,
@@ -18,16 +31,16 @@ export async function getAgentLeads(segment?:string|null){
     WHERE source='agent'
   `
 
-  const params:any[] = []
+  const params: string[] = []
 
-  if(segment){
+  if (segment) {
     query += " AND segment = ?"
     params.push(segment)
   }
 
   query += " ORDER BY created_at DESC LIMIT 500"
 
-  const [rows] = await db.query(query,params)
+  const [rows] = await db.query<AgentLeadRow[]>(query, params)
 
   return rows
 }

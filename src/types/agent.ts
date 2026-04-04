@@ -1,3 +1,5 @@
+import type { Pool, PoolConnection } from "mysql2/promise"
+
 export type TaskConfig = {
   geo: {
     mode: string
@@ -19,4 +21,22 @@ export type TaskConfig = {
   }
   limit: number
   speed: string
+}
+
+export type DbClient = Pool | PoolConnection
+
+export type LeadInput = {
+  name?: string | null
+  email?: string | null
+  website?: string | null
+  source?: string | null
+  platform?: string | null
+}
+
+export type LeadScore = {
+  fit_score: number
+  intent_score: number
+  engagement_score: number
+  total_score: number
+  segment: "cold" | "warm" | "hot"
 }

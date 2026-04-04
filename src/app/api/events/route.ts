@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
+import type { RowDataPacket } from "mysql2/promise"
 import { db } from "@/lib/db"
 import { EVENT_CONFIG } from "@/lib/eventConfig"
+
+type EventTotalRow = RowDataPacket & {
+  total: number
+}
+
+type EventBody = {
+  leadId?: number
+  eventType?: string
+  metadata?: unknown
+}
 
 function calculateSegment(score: number): string {
   if (score >= 81) return "priority"
@@ -11,7 +22,7 @@ function calculateSegment(score: number): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { leadId, eventType, metadata } = await req.json()
+    const { leadId, eventType, metadata } = (await req.json()) as EventBody
 
     if (!leadId || !eventType) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
@@ -28,25 +39,22 @@ export async function POST(req: NextRequest) {
     try {
       await connection.beginTransaction()
 
-      // 1️⃣ zapis eventu
       await connection.query(
         `INSERT INTO lead_events (lead_id, event_type, event_value, metadata)
          VALUES (?, ?, ?, ?)`,
         [leadId, eventType, eventValue, JSON.stringify(metadata || null)]
       )
 
-      // 2️⃣ przeliczenie total_score
-      const [rows]: any = await connection.query(
+      const [rows] = await connection.query<EventTotalRow[]>(
         `SELECT COALESCE(SUM(event_value),0) as total
          FROM lead_events
          WHERE lead_id = ?`,
         [leadId]
       )
 
-      const totalScore = Number(rows[0].total)
+      const totalScore = Number(rows[0]?.total ?? 0)
       const segment = calculateSegment(totalScore)
 
-      // 3️⃣ update leads
       await connection.query(
         `UPDATE leads
          SET total_score = ?, segment = ?
@@ -59,21 +67,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         totalScore,
-        segment
+        segment,
       })
-
     } catch (err) {
       await connection.rollback()
       throw err
     } finally {
       connection.release()
     }
-
   } catch (error) {
     console.error(error)
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }

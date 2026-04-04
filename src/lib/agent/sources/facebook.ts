@@ -1,10 +1,11 @@
-import { TaskConfig } from "@/types/agent"
+import type { DbClient, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
 
 const PAGE_ID = process.env.FACEBOOK_PAGE_ID
 const TOKEN = process.env.FACEBOOK_TOKEN
 
-export async function crawlFacebook(db: any, config: TaskConfig) {
+export async function crawlFacebook(db: DbClient, config: TaskConfig) {
+  void config
 
   console.log("Facebook crawler started")
 
@@ -14,12 +15,12 @@ export async function crawlFacebook(db: any, config: TaskConfig) {
   }
 
   try {
-
-    const postsUrl =
-      `https://graph.facebook.com/v19.0/${PAGE_ID}/posts?limit=10&access_token=${TOKEN}`
+    const postsUrl = `https://graph.facebook.com/v19.0/${PAGE_ID}/posts?limit=10&access_token=${TOKEN}`
 
     const postsRes = await fetch(postsUrl)
-    const postsData = await postsRes.json()
+    const postsData = (await postsRes.json()) as {
+      data?: Array<{ id: string }>
+    }
 
     if (!postsData.data) {
       console.log("No posts found")
@@ -27,17 +28,16 @@ export async function crawlFacebook(db: any, config: TaskConfig) {
     }
 
     for (const post of postsData.data) {
-
-      const commentsUrl =
-        `https://graph.facebook.com/v19.0/${post.id}/comments?limit=50&access_token=${TOKEN}`
+      const commentsUrl = `https://graph.facebook.com/v19.0/${post.id}/comments?limit=50&access_token=${TOKEN}`
 
       const commentsRes = await fetch(commentsUrl)
-      const commentsData = await commentsRes.json()
+      const commentsData = (await commentsRes.json()) as {
+        data?: Array<{ from?: { id: string; name: string } }>
+      }
 
       if (!commentsData.data) continue
 
       for (const comment of commentsData.data) {
-
         if (!comment.from) continue
 
         const lead = {
@@ -45,21 +45,15 @@ export async function crawlFacebook(db: any, config: TaskConfig) {
           website: `https://facebook.com/${comment.from.id}`,
           email: null,
           source: "agent",
-          platform: "facebook"
+          platform: "facebook",
         }
 
         console.log("Saving Facebook lead:", lead)
 
         await saveLead(db, lead)
-
       }
-
     }
-
   } catch (err) {
-
     console.error("Facebook crawler error:", err)
-
   }
-
 }

@@ -1,5 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { RowDataPacket } from "mysql2/promise";
 import { db } from "@/lib/db";
+
+type LeadRow = RowDataPacket & {
+  id: number;
+  name: string;
+  email: string;
+  created_at: string;
+  ip_address: string;
+  status: string;
+  segment: string;
+  total_score: number;
+};
+
+type CountRow = RowDataPacket & {
+  total: number;
+};
+
+type DayStatRow = RowDataPacket & {
+  day: string;
+  count: number;
+};
+
+type StatusStatRow = RowDataPacket & {
+  status: string;
+  count: number;
+};
+
+type SegmentStatRow = RowDataPacket & {
+  segment: string;
+  count: number;
+};
+
+type TodayNewRow = RowDataPacket & {
+  todayNew: number;
+};
+
+type FollowUpRow = RowDataPacket & {
+  toFollowUp: number;
+};
+
+type IpStatRow = RowDataPacket & {
+  ip_address: string;
+  count: number;
+};
 
 export async function GET(req: NextRequest) {
   const token = req.headers.get("authorization");
@@ -14,14 +58,13 @@ export async function GET(req: NextRequest) {
   const offset = (page - 1) * limit;
 
   try {
-    // search condition
     const search = searchParams.get("search") || "";
     const statusFilter = searchParams.get("status");
     const dateFrom = searchParams.get("from");
     const dateTo = searchParams.get("to");
 
-    let whereParts: string[] = [];
-    let values: any[] = [];
+    const whereParts: string[] = [];
+    const values: Array<string | number> = [];
 
     if (search) {
       whereParts.push("email LIKE ?");
@@ -42,38 +85,36 @@ export async function GET(req: NextRequest) {
       ? `WHERE ${whereParts.join(" AND ")}`
       : "";
 
-    // total count
-    const [[{ total }]]: any = await db.query(
+    const [countRows] = await db.query<CountRow[]>(
       `
-    SELECT COUNT(*) as total
-    FROM leads
-    ${whereClause}
-    `,
+      SELECT COUNT(*) as total
+      FROM leads
+      ${whereClause}
+      `,
       values,
     );
+    const total = countRows[0]?.total ?? 0;
 
-    // leads
-    const [rows] = await db.query(
+    const [rows] = await db.query<LeadRow[]>(
       `
-    SELECT 
-      id,
-      name,
-      email,
-      created_at,
-      ip_address,
-      status,
-      segment,
-      total_score
-    FROM leads
-    ${whereClause}
-    ORDER BY created_at DESC
-    LIMIT ? OFFSET ?
-    `,
-        [...values, limit, offset],
+      SELECT 
+        id,
+        name,
+        email,
+        created_at,
+        ip_address,
+        status,
+        segment,
+        total_score
+      FROM leads
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+      `,
+      [...values, limit, offset],
     );
 
-    // daily stats
-    const [stats] = await db.query(`
+    const [stats] = await db.query<DayStatRow[]>(`
       SELECT DATE(created_at) as day, COUNT(*) as count
       FROM leads
       GROUP BY day
@@ -81,35 +122,35 @@ export async function GET(req: NextRequest) {
       LIMIT 30
     `);
 
-    // status stats
-    const [statusStats] = await db.query(`
+    const [statusStats] = await db.query<StatusStatRow[]>(`
       SELECT status, COUNT(*) as count
       FROM leads
       GROUP BY status
     `);
 
-    // segments stats
-    const [segmentStats] = await db.query(`
+    const [segmentStats] = await db.query<SegmentStatRow[]>(`
       SELECT segment, COUNT(*) as count
       FROM leads
       GROUP BY segment
     `);
 
-    const [[{ todayNew }]]: any = await db.query(`
+    const [todayRows] = await db.query<TodayNewRow[]>(`
       SELECT COUNT(*) as todayNew
       FROM leads
       WHERE status = 'new'
       AND DATE(created_at) = CURDATE()
     `);
+    const todayNew = todayRows[0]?.todayNew ?? 0;
 
-    const [[{ toFollowUp }]]: any = await db.query(`
+    const [followUpRows] = await db.query<FollowUpRow[]>(`
       SELECT COUNT(*) as toFollowUp
       FROM leads
       WHERE status = 'contacted'
       AND DATE(contacted_at) = CURDATE()
     `);
+    const toFollowUp = followUpRows[0]?.toFollowUp ?? 0;
 
-    const [ipStats]: any = await db.query(`
+    const [ipStats] = await db.query<IpStatRow[]>(`
       SELECT ip_address, COUNT(*) as count
       FROM leads
       GROUP BY ip_address
@@ -130,7 +171,7 @@ export async function GET(req: NextRequest) {
       page,
       totalPages: Math.ceil(total / limit),
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 }

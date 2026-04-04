@@ -1,25 +1,28 @@
 import { NextResponse } from "next/server";
+import type { RowDataPacket } from "mysql2/promise";
 import { db } from "@/lib/db";
-import { sendEducationEmail, sendDecisionEmail } from "@/lib/mailer";
+import { sendDecisionEmail, sendEducationEmail } from "@/lib/mailer";
+
+type EmailSequenceRow = RowDataPacket & {
+  id: number;
+  lead_id: number;
+  type: "education" | "decision";
+  email: string;
+  name: string;
+};
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const secret = searchParams.get("secret")
+    const { searchParams } = new URL(request.url);
+    const secret = searchParams.get("secret");
 
-    const isVercelCron = request.headers.get("x-vercel-cron") === "1"
+    const isVercelCron = request.headers.get("x-vercel-cron") === "1";
 
-    if (
-      !isVercelCron &&
-      secret !== process.env.CRON_SECRET
-    ) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
+    if (!isVercelCron && secret !== process.env.CRON_SECRET) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [rows]: any = await db.execute(
+    const [rows] = await db.execute<EmailSequenceRow[]>(
       `SELECT es.*, l.email, l.name
        FROM email_sequences es
        JOIN leads l ON es.lead_id = l.id
@@ -35,7 +38,7 @@ export async function GET(request: Request) {
         }
 
         if (row.type === "decision") {
-          await sendDecisionEmail(row.email, row.name, row.leadID);
+          await sendDecisionEmail(row.email, row.name, row.lead_id);
         }
 
         await db.execute(
@@ -44,7 +47,7 @@ export async function GET(request: Request) {
            WHERE id = ?`,
           [row.id],
         );
-      } catch (error: any) {
+      } catch (error) {
         await db.execute(
           `UPDATE email_sequences
            SET error = ?

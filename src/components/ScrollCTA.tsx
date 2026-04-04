@@ -1,45 +1,47 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState } from "react"
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 export default function ScrollCTA() {
-
-  const ref = useRef<HTMLDivElement>(null)
-  const [visible, setVisible] = useState(false)
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setVisible(true)
+          setVisible(true);
         }
       },
-      { threshold: 0.3 }
-    )
+      { threshold: 0.3 },
+    );
 
-    if (ref.current) {
-      observer.observe(ref.current)
+    const node = sectionRef.current;
+
+    if (node) {
+      observer.observe(node);
     }
 
     return () => {
-      if (ref.current) observer.unobserve(ref.current)
-    }
+      if (node) {
+        observer.unobserve(node);
+      }
 
-  }, [])
+      observer.disconnect();
+    };
+  }, []);
 
   return (
-    <div ref={ref} className="mt-12 mb-12 flex justify-center">
-
+    <div ref={sectionRef} className="mt-12 mb-12 flex justify-center">
       {visible && (
-        <a
+        <Link
           href="/"
           className="bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-xl font-semibold text-lg shadow-lg transition"
         >
           Zobacz więcej informacji
-        </a>
+        </Link>
       )}
-
     </div>
-  )
+  );
 }

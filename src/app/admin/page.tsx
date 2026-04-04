@@ -23,6 +23,59 @@ type StatusStat = {
   count: number;
 };
 
+type IpStat = {
+  ip_address: string;
+  count: number;
+};
+
+type SegmentStat = {
+  segment: string;
+  count: number;
+};
+
+type AdminData = {
+  leads: Lead[];
+  stats: Stat[];
+  total: number;
+  page: number;
+  totalPages: number;
+  statusStats: StatusStat[];
+  todayNew: number;
+  toFollowUp: number;
+  ipStats: IpStat[];
+  segmentStats: SegmentStat[];
+};
+
+async function requestAdminData(
+  adminToken: string,
+  search: string,
+  pageNum = 1,
+  status = "",
+  from = "",
+  to = "",
+): Promise<AdminData | null> {
+  if (!adminToken) return null;
+
+  const params = new URLSearchParams({
+    page: String(pageNum),
+    search,
+  });
+
+  if (status) params.append("status", status);
+  if (from && to) {
+    params.append("from", from);
+    params.append("to", to);
+  }
+
+  const res = await fetch(`/api/admin/leads?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+
+  if (!res.ok) return null;
+
+  return (await res.json()) as AdminData;
+}
+
 export default function AdminPage() {
   const [token, setToken] = useState("");
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -34,8 +87,8 @@ export default function AdminPage() {
   const [statusStats, setStatusStats] = useState<StatusStat[]>([]);
   const [todayNew, setTodayNew] = useState(0);
   const [toFollowUp, setToFollowUp] = useState(0);
-  const [ipStats, setIpStats] = useState<any[]>([]);
-  const [segmentStats, setSegmentStats] = useState<any[]>([]);
+  const [ipStats, setIpStats] = useState<IpStat[]>([]);
+  const [segmentStats, setSegmentStats] = useState<SegmentStat[]>([]);
 
   const fetchData = async (
     adminToken: string,
@@ -44,25 +97,18 @@ export default function AdminPage() {
     from = "",
     to = "",
   ) => {
-    const params = new URLSearchParams({
-      page: String(pageNum),
+    const data = await requestAdminData(
+      adminToken,
       search,
-    });
+      pageNum,
+      status,
+      from,
+      to,
+    );
+    if (!data) return;
 
-    if (status) params.append("status", status);
-    if (from && to) {
-      params.append("from", from);
-      params.append("to", to);
-    }
-
-    const res = await fetch(`/api/admin/leads?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
-
-    if (!res.ok) return;
-
-    const data = await res.json();
-
+    localStorage.setItem("admin_token", adminToken);
+    setToken(adminToken);
     setLeads(data.leads);
     setStats(data.stats);
     setStatusStats(data.statusStats);
@@ -76,11 +122,34 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem("admin_token");
-    if (saved) {
+    let active = true;
+
+    async function restoreSession() {
+      const saved = localStorage.getItem("admin_token");
+      if (!saved) return;
+
+      const data = await requestAdminData(saved, "");
+      if (!data || !active) return;
+
+      localStorage.setItem("admin_token", saved);
       setToken(saved);
-      fetchData(saved);
+      setLeads(data.leads);
+      setStats(data.stats);
+      setStatusStats(data.statusStats);
+      setTotal(data.total);
+      setPage(data.page);
+      setTotalPages(data.totalPages);
+      setTodayNew(data.todayNew);
+      setToFollowUp(data.toFollowUp);
+      setIpStats(data.ipStats);
+      setSegmentStats(data.segmentStats);
     }
+
+    void restoreSession();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const maxDay = Math.max(...stats.map((s) => s.count), 1);
@@ -92,6 +161,8 @@ export default function AdminPage() {
       },
     });
 
+    if (!res.ok) return;
+
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
 
@@ -99,6 +170,7 @@ export default function AdminPage() {
     a.href = url;
     a.download = "leads.csv";
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const [statusFilter, setStatusFilter] = useState("");

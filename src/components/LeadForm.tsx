@@ -1,23 +1,29 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   path?: string;
   onSuccess?: () => void;
 };
 
+type LeadFormErrors = {
+  name?: string[];
+  email?: string[];
+};
+
+type LeadFormErrorResponse = {
+  error?: {
+    fieldErrors?: LeadFormErrors;
+  };
+};
+
 export default function LeadForm({ path, onSuccess }: Props) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
-
-  const [errors, setErrors] = useState<{
-    name?: string[];
-    email?: string[];
-  }>({});
+  const [errors, setErrors] = useState<LeadFormErrors>({});
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -47,17 +53,16 @@ export default function LeadForm({ path, onSuccess }: Props) {
         }),
       });
 
-      const data = await res.json();
+      const data: LeadFormErrorResponse = await res.json();
 
       if (!res.ok) {
-        setErrors(data?.error?.fieldErrors || {});
-        setStatus("Błąd walidacji ❌");
+        setErrors(data.error?.fieldErrors || {});
+        setStatus("Błąd walidacji");
         setLoading(false);
         return;
       }
 
-      setStatus("Zapisano ✔");
-
+      setStatus("Zapisano");
       setName("");
       setEmail("");
       setLoading(false);
@@ -65,9 +70,8 @@ export default function LeadForm({ path, onSuccess }: Props) {
       if (onSuccess) {
         onSuccess();
       }
-
-    } catch (error) {
-      setStatus("Błąd połączenia ❌");
+    } catch {
+      setStatus("Błąd połączenia");
       setLoading(false);
     }
   };
@@ -89,9 +93,7 @@ export default function LeadForm({ path, onSuccess }: Props) {
         }`}
       />
 
-      {errors.name && (
-        <p className="text-red-400 text-sm">{errors.name[0]}</p>
-      )}
+      {errors.name && <p className="text-red-400 text-sm">{errors.name[0]}</p>}
 
       <input
         type="email"
@@ -114,15 +116,13 @@ export default function LeadForm({ path, onSuccess }: Props) {
         className="bg-green-500 hover:bg-green-600 p-3 rounded font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {loading && (
-          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
         )}
 
         {loading ? "Wysyłanie..." : "Zapisz się"}
       </button>
 
-      {status && (
-        <p className="text-sm text-gray-300 text-center">{status}</p>
-      )}
+      {status && <p className="text-sm text-gray-300 text-center">{status}</p>}
     </form>
   );
 }

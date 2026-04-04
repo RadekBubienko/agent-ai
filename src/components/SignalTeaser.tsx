@@ -4,7 +4,6 @@ export default function SignalTeaser() {
   return (
     <section className="py-20 px-6 bg-gray-50">
       <div className="max-w-4xl mx-auto text-center space-y-8">
-
         <h2 className="text-3xl md:text-4xl font-light leading-snug">
           A gdyby organizmowi przypomnieć,
           <br />
@@ -19,8 +18,8 @@ export default function SignalTeaser() {
 
         <p className="text-gray-600 max-w-xl mx-auto">
           Technologia ta opiera się na zjawisku
-          <span className="font-medium"> fotobiomodulacji </span>– reakcji
-          organizmu na określone długości fal światła.
+          <span className="font-medium"> fotobiomodulacji </span>
+          - reakcji organizmu na określone długości fal światła.
         </p>
 
         <Link
