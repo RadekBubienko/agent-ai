@@ -1,26 +1,15 @@
 import type { RowDataPacket } from "mysql2/promise"
 import type { DbClient, LeadInput } from "@/types/agent"
+import { normalizeDomain } from "./leadIdentity"
+import { findRejectedLead } from "./rejectedLeads"
 
 type DuplicateLeadRow = RowDataPacket & {
   id: number
 }
 
-function normalizeDomain(url?: string | null): string | null {
-  if (!url) return null
-
-  try {
-    const u = new URL(url.startsWith("http") ? url : "https://" + url)
-
-    let host = u.hostname.toLowerCase()
-
-    if (host.startsWith("www.")) {
-      host = host.replace("www.", "")
-    }
-
-    return host
-  } catch {
-    return null
-  }
+export type LeadMatch = {
+  id: number
+  type: "duplicate" | "rejected"
 }
 
 export async function findDuplicate(db: DbClient, lead: LeadInput) {
@@ -55,6 +44,31 @@ export async function findDuplicate(db: DbClient, lead: LeadInput) {
     )
 
     if (rows.length) return rows[0].id
+  }
+
+  return null
+}
+
+export async function findLeadMatch(
+  db: DbClient,
+  lead: LeadInput,
+): Promise<LeadMatch | null> {
+  const rejectedId = await findRejectedLead(db, lead)
+
+  if (rejectedId) {
+    return {
+      id: rejectedId,
+      type: "rejected",
+    }
+  }
+
+  const duplicateId = await findDuplicate(db, lead)
+
+  if (duplicateId) {
+    return {
+      id: duplicateId,
+      type: "duplicate",
+    }
   }
 
   return null

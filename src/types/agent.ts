@@ -34,8 +34,9 @@ export type LeadInput = {
 }
 
 export type SaveLeadResult = {
-  id: number
+  id: number | null
   created: boolean
+  reason?: "duplicate" | "rejected" | null
 }
 
 export type LeadScore = {

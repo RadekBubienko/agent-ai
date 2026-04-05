@@ -1,25 +1,8 @@
 import type { ResultSetHeader } from "mysql2/promise";
 import { scoreLead } from "@/lib/ai/leadScoring";
 import type { DbClient, LeadInput, SaveLeadResult } from "@/types/agent";
-import { findDuplicate } from "./dedup";
-
-function normalizeDomain(url?: string | null): string | null {
-  if (!url) return null;
-
-  try {
-    const u = new URL(url.startsWith("http") ? url : "https://" + url);
-
-    let host = u.hostname.toLowerCase();
-
-    if (host.startsWith("www.")) {
-      host = host.replace("www.", "");
-    }
-
-    return host;
-  } catch {
-    return null;
-  }
-}
+import { findLeadMatch } from "./dedup";
+import { resolveLeadDomain } from "./leadIdentity";
 
 type SaveLeadOptions = {
   taskId?: string | null;
@@ -48,13 +31,19 @@ export async function saveLead(
   lead: LeadInput,
   options: SaveLeadOptions = {},
 ): Promise<SaveLeadResult> {
-  const duplicate = await findDuplicate(db, lead);
+  const match = await findLeadMatch(db, lead);
   const taskId = options.taskId ?? null;
   const source = lead.source ?? "agent";
   const platform = lead.platform ?? null;
 
-  if (duplicate) {
-    console.log("duplicate lead:", duplicate);
+  if (match?.type === "rejected") {
+    console.log("rejected lead match:", match.id);
+
+    return { id: match.id, created: false, reason: "rejected" };
+  }
+
+  if (match?.type === "duplicate") {
+    console.log("duplicate lead:", match.id);
 
     await db.query(
       `
@@ -73,15 +62,13 @@ export async function saveLead(
         END
       WHERE id = ?
       `,
-      [source, source, source, platform, taskId, duplicate],
+      [source, source, source, platform, taskId, match.id],
     );
 
-    return { id: duplicate, created: false };
+    return { id: match.id, created: false, reason: "duplicate" };
   }
 
-  const domain =
-    normalizeDomain(lead.website) ||
-    (lead.email ? lead.email.split("@")[1] : null);
+  const domain = resolveLeadDomain(lead);
 
   const [result] = await db.query<ResultSetHeader>(
     `
@@ -132,5 +119,5 @@ export async function saveLead(
     console.error("Lead scoring failed:", error);
   }
 
-  return { id: leadId, created: true };
+  return { id: leadId, created: true, reason: null };
 }

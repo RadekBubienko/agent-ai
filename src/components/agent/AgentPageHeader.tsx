@@ -16,6 +16,7 @@ const navigationLinks = [
   { href: "/", label: "Strona główna" },
   { href: "/agent", label: "Dashboard" },
   { href: "/agent/leads", label: "Leady" },
+  { href: "/agent/rejected-leads", label: "Odrzucone" },
 ];
 
 function linkClasses(isActive: boolean) {
@@ -31,6 +32,18 @@ export default function AgentPageHeader({
 }: AgentPageHeaderProps) {
   const pathname = usePathname();
 
+  function isActiveLink(href: string) {
+    if (href === "/") {
+      return pathname === href;
+    }
+
+    if (href === "/agent") {
+      return pathname === "/agent" || pathname.startsWith("/agent/tasks/");
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
   return (
     <div className="mb-8 rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -40,7 +53,7 @@ export default function AgentPageHeader({
               <Link
                 key={link.href}
                 href={link.href}
-                className={linkClasses(pathname === link.href)}
+                className={linkClasses(isActiveLink(link.href))}
               >
                 {link.label}
               </Link>
