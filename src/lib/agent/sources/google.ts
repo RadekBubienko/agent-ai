@@ -16,6 +16,17 @@ const SEARCH_HEADERS = {
   "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 };
 
+export type SearchAttemptDebug = {
+  endpoint: string;
+  status?: number;
+  htmlLength: number;
+  linksFound: number;
+  sampleLinks: string[];
+  title: string;
+  preview: string;
+  error?: string;
+};
+
 export async function crawlGoogle(
   db: DbClient,
   config: TaskConfig,
@@ -97,29 +108,65 @@ function buildQueries(config: TaskConfig): string[] {
 }
 
 async function searchLinks(query: string): Promise<string[]> {
+  const attempts = await debugSearchQuery(query);
+
+  for (const attempt of attempts) {
+    console.log("Search endpoint:", attempt.endpoint);
+    console.log("HTML size:", attempt.htmlLength);
+
+    if (attempt.sampleLinks.length > 0) {
+      return attempt.sampleLinks;
+    }
+  }
+
+  return [];
+}
+
+export async function debugSearchQuery(
+  query: string,
+): Promise<SearchAttemptDebug[]> {
+  const attempts: SearchAttemptDebug[] = [];
+
   for (const endpoint of SEARCH_ENDPOINTS) {
     try {
       const url = endpoint + encodeURIComponent(query);
       const res = await fetch(url, {
         headers: SEARCH_HEADERS,
+        cache: "no-store",
       });
 
       const html = await res.text();
-
-      console.log("Search endpoint:", endpoint);
-      console.log("HTML size:", html.length);
-
       const links = extractLinks(html);
+      const $ = cheerio.load(html);
+      const preview = $("body")
+        .text()
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 240);
 
-      if (links.length > 0) {
-        return links;
-      }
+      attempts.push({
+        endpoint,
+        status: res.status,
+        htmlLength: html.length,
+        linksFound: links.length,
+        sampleLinks: links.slice(0, 10),
+        title: $("title").text().trim(),
+        preview,
+      });
     } catch (error) {
-      console.error("Search fetch failed:", endpoint, error);
+      attempts.push({
+        endpoint,
+        htmlLength: 0,
+        linksFound: 0,
+        sampleLinks: [],
+        title: "",
+        preview: "",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
-  return [];
+  return attempts;
 }
 
 function extractLinks(html: string): string[] {

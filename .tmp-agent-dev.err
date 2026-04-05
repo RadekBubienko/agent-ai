@@ -1,9 +1,1 @@
-⨯ Failed to start server
-Error: listen EADDRINUSE: address already in use 127.0.0.1:3005
-    at <unknown> (Error: listen EADDRINUSE: address already in use 127.0.0.1:3005) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '127.0.0.1',
-  port: 3005
-}
+⨯ Unable to acquire lock at E:\dev\agent-ai\.next\dev\lock, is another instance of next dev running?
