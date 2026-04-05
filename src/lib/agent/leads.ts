@@ -15,6 +15,15 @@ type AgentLeadRow = RowDataPacket & {
 }
 
 export async function getAgentLeads(segment?: string | null) {
+  return getAgentLeadsByFilters({ segment });
+}
+
+type AgentLeadFilters = {
+  platform?: string | null
+  segment?: string | null
+}
+
+export async function getAgentLeadsByFilters(filters: AgentLeadFilters = {}) {
   let query = `
     SELECT
       id,
@@ -38,6 +47,13 @@ export async function getAgentLeads(segment?: string | null) {
   `
 
   const params: string[] = []
+  const platform = filters.platform?.trim()
+  const segment = filters.segment?.trim()
+
+  if (platform) {
+    query += " AND platform = ?"
+    params.push(platform)
+  }
 
   if (segment) {
     query += " AND segment = ?"

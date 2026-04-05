@@ -34,6 +34,148 @@ const SEARCH_HEADERS = {
   "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 };
 
+const BLOCKED_HOST_PATTERNS = [
+  "facebook.com",
+  "instagram.com",
+  "youtube.com",
+  "youtu.be",
+  "tiktok.com",
+  "x.com",
+  "twitter.com",
+  "linkedin.com",
+  "wikipedia.org",
+  "wikimedia.org",
+  "gov.pl",
+  "pap.pl",
+  "abczdrowie.pl",
+  "poradnikzdrowie.pl",
+  "rynekzdrowia.pl",
+  "medonet.pl",
+  "doz.pl",
+  "hellozdrowie.pl",
+  "zdrowie.pl",
+  "onet.pl",
+  "allegro.pl",
+  "gemini.pl",
+  "cambridge.org",
+  "nofluffjobs.com",
+  "pep.pl",
+  "znanylekarz.pl",
+  "tvn24.pl",
+  "radiozet.pl",
+  "baidu.com",
+  "zhihu.com",
+  "goo.ne.jp",
+  "stronazdrowia.pl",
+  "politykazdrowotna.com",
+  "elle.pl",
+  "pwn.pl",
+  "dobryslownik.pl",
+  "diki.pl",
+  "zwierciadlo.pl",
+  "magazynuroda.pl",
+  "urodaizdrowie.pl",
+];
+
+const BLOCKED_PATH_PATTERNS = [
+  "/wiki/",
+  "/videos/",
+  "/video/",
+  "/watch",
+  "/reel/",
+  "/posts/",
+  "/post/",
+  "/poradnik/",
+  "/blog/",
+  "/dictionary/",
+  "/slownik/",
+  "/log/",
+  "/artyk",
+  "/news/",
+  "/dzial/",
+];
+
+const BUSINESS_SIGNALS = [
+  "kontakt",
+  "o nas",
+  "oferta",
+  "uslugi",
+  "cennik",
+  "rezerwacja",
+  "umow wizyte",
+  "gabinet",
+  "klinika",
+  "salon",
+  "centrum",
+  "studio",
+  "sklep",
+  "adres",
+  "telefon",
+  "formularz kontaktowy",
+  "godziny otwarcia",
+  "zespol",
+  "specjalista",
+  "terapia",
+  "zabieg",
+  "konsultacja",
+  "produkt",
+  "zamow",
+  "kup teraz",
+  "koszyk",
+  "nip",
+  "regon",
+  "krs",
+];
+
+const STRONG_BUSINESS_SIGNALS = [
+  "formularz kontaktowy",
+  "godziny otwarcia",
+  "umow wizyte",
+  "rezerwacja",
+  "cennik",
+  "adres",
+  "telefon",
+  "nip",
+  "regon",
+  "krs",
+  "zamow",
+  "koszyk",
+];
+
+const EDITORIAL_SIGNALS = [
+  "redakcja",
+  "czytaj wiecej",
+  "newsletter",
+  "artykul",
+  "portal",
+  "news",
+  "wiadomosci",
+  "autor",
+  "udostepnij",
+  "komentarze",
+  "publikacja",
+  "aktualnosci",
+  "magazyn",
+  "poradnik",
+  "przeczytaj",
+];
+
+const PUBLIC_INSTITUTION_SIGNALS = [
+  "ministerstwo",
+  "serwis rzadowy",
+  "urzad",
+  "urzad marszalkowski",
+  "samorzad",
+  "gov.pl",
+  "bip",
+  "nfz",
+  "centrum e-zdrowia",
+  "wojewodztwo",
+  "gmina",
+  "powiat",
+  "fundusze europejskie",
+];
+
 export type SearchAttemptDebug = {
   endpoint: string;
   provider: "duckduckgo" | "brave" | "bing";
@@ -51,6 +193,11 @@ export type SearchAttemptDebug = {
   error?: string;
 };
 
+type PageQualityDecision = {
+  accepted: boolean;
+  reason: string;
+};
+
 export async function crawlGoogle(
   db: DbClient,
   config: TaskConfig,
@@ -61,6 +208,7 @@ export async function crawlGoogle(
 
   const limit = config.limit || 50;
   let leadsSaved = 0;
+  const seenDomains = new Set<string>();
 
   const queries = buildQueries(config);
 
@@ -69,7 +217,9 @@ export async function crawlGoogle(
   for (const query of queries) {
     console.log("Search query:", query);
 
-    const links = await searchLinks(query);
+    const links = (await searchLinks(query)).filter((link) =>
+      isAllowedSearchResult(link),
+    );
 
     console.log("Links found:", links.length);
 
@@ -79,21 +229,58 @@ export async function crawlGoogle(
         return leadsSaved;
       }
 
+      const domain = extractDomain(link).toLowerCase();
+
+      if (seenDomains.has(domain)) {
+        console.log("Skipping duplicate domain in task:", domain);
+        continue;
+      }
+
+      seenDomains.add(domain);
+
       const htmlPage = await fetchWebsite(link);
       let email: string | null = null;
+      let phones: string[] = [];
 
       if (htmlPage) {
         const emails = findEmails(htmlPage);
+        const bestEmail = pickLeadEmail(emails, link);
+        phones = findPhones(htmlPage);
 
         console.log("Emails found:", emails);
 
-        if (emails.length > 0) {
-          email = emails[0];
+        if (bestEmail) {
+          email = bestEmail;
         }
+
+        const qualityDecision = evaluatePageQuality(
+          htmlPage,
+          link,
+          email,
+          phones,
+        );
+
+        if (!qualityDecision.accepted) {
+          console.log(qualityDecision.reason, link);
+          continue;
+        }
+      } else {
+        console.log("Skipping unreachable page:", link);
+        continue;
+      }
+
+      if (config.quality_filters.email_required && !email) {
+        console.log("Skipping lead without email:", link);
+        continue;
+      }
+
+      if (config.quality_filters.phone_required && phones.length === 0) {
+        console.log("Skipping lead without phone:", link);
+        continue;
       }
 
       const lead = {
-        name: extractDomain(link),
+        name: domain,
         website: link,
         source: "agent",
         platform: "search",
@@ -116,19 +303,27 @@ export async function crawlGoogle(
 }
 
 function buildQueries(config: TaskConfig): string[] {
-  const queries: string[] = [];
-  const keywords = config.industry?.keywords || [];
-  const city = config.geo?.city;
-  const country = config.geo?.country;
+  const queries = new Set<string>();
+  const keywords = (config.industry?.keywords || [])
+    .map((keyword) => keyword.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+  const location = getSearchLocation(config);
+  const modifiers = getBusinessModifiers(config).slice(0, 2);
+  const intentTerms = getQueryIntentTerms(config).slice(0, 2);
 
   for (const keyword of keywords) {
-    if (city) queries.push(`${keyword} ${city}`);
-    if (country) queries.push(`${keyword} ${country}`);
+    queries.add(joinQueryParts(keyword, location));
 
-    queries.push(keyword);
+    for (const modifier of modifiers) {
+      queries.add(joinQueryParts(keyword, modifier, location));
+    }
+
+    for (const intent of intentTerms) {
+      queries.add(joinQueryParts(keyword, intent, location));
+    }
   }
 
-  return queries;
+  return [...queries].filter(Boolean);
 }
 
 async function searchLinks(query: string): Promise<string[]> {
@@ -383,8 +578,10 @@ function isUsefulBingAnchorText(text: string): boolean {
     return false;
   }
 
-  const normalized = text.toLowerCase();
+  const normalized = normalizeSignalText(text);
   const blocked = [
+    "przejdz do zawartosci",
+    "opinia dotyczaca ulatwien dostepu",
     "przejdź do zawartości",
     "opinia dotycząca ułatwień dostępu",
     "english",
@@ -392,13 +589,18 @@ function isUsefulBingAnchorText(text: string): boolean {
     "obrazy",
     "wideo",
     "mapy",
+    "wiadomosci",
     "wiadomości",
     "zakupy",
     "loty",
+    "podroze",
+    "narzedzia",
+    "prywatnosc",
     "podróże",
     "narzędzia",
     "prywatność",
     "warunki",
+    "dowiedz sie wiecej",
     "dowiedz się więcej",
   ];
 
@@ -479,10 +681,343 @@ function isUsefulBraveLink(href: string, text: string): boolean {
 function extractDomain(url: string): string {
   try {
     const u = new URL(url);
-    return u.hostname;
+    return u.hostname.replace(/^www\./, "");
   } catch {
     return url;
   }
+}
+
+function getBusinessModifiers(config: TaskConfig): string[] {
+  const entityTypes = new Set(config.entity_type ?? []);
+
+  if (entityTypes.has("mlm_prospect")) {
+    return ["wellness", "kontakt", "firma"];
+  }
+
+  if (entityTypes.has("shop")) {
+    return ["sklep", "hurtownia", "produkty"];
+  }
+
+  if (entityTypes.has("person") || entityTypes.has("influencer")) {
+    return ["studio", "gabinet", "kontakt"];
+  }
+
+  if (entityTypes.has("company")) {
+    return ["firma", "uslugi", "kontakt"];
+  }
+
+  return ["gabinet", "klinika", "salon"];
+}
+
+function isAllowedSearchResult(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+
+    if (
+      BLOCKED_HOST_PATTERNS.some(
+        (pattern) => host === pattern || host.endsWith(`.${pattern}`),
+      )
+    ) {
+      console.log("Skipping blocked host:", host);
+      return false;
+    }
+
+    if (BLOCKED_PATH_PATTERNS.some((pattern) => path.includes(pattern))) {
+      console.log("Skipping blocked path:", url);
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isBlockedPageContent(html: string): boolean {
+  const text = normalizePageText(html);
+  const blockedFragments = [
+    "wikipedia",
+    "ministerstwo zdrowia",
+    "serwis rzadowy",
+    "urzad marszalkowski",
+    "centrum e-zdrowia",
+    "serwis rządowy",
+    "gov.pl",
+    "pacjent.gov.pl",
+    "pap mediaroom",
+    "poradnikzdrowie",
+    "abczdrowie",
+    "rynek zdrowia",
+    "tvn24",
+    "radio zet",
+    "zhihu",
+    "baidu",
+  ];
+
+  return blockedFragments.some((fragment) => text.includes(fragment));
+}
+
+function isEditorialPageContent(html: string): boolean {
+  const text = normalizePageText(html);
+  const editorialSignals = [
+    "redakcja",
+    "aktualnosci",
+    "magazyn",
+    "poradnik",
+    "wiadomości",
+    "wiadomosci",
+    "czytaj więcej",
+    "czytaj wiecej",
+    "newsletter",
+    "artykuł",
+    "artykul",
+    "portal",
+    "news",
+    "autor",
+    "udostępnij",
+    "udostepnij",
+    "komentarze",
+  ];
+
+  return countSignalMatches(text, editorialSignals) >= 3;
+}
+
+function isLikelyBusinessPage(html: string): boolean {
+  const text = normalizePageText(html);
+  const businessSignals = [
+    "kontakt",
+    "o nas",
+    "oferta",
+    "formularz kontaktowy",
+    "godziny otwarcia",
+    "usługi",
+    "uslugi",
+    "cennik",
+    "rezerwacja",
+    "umów wizytę",
+    "umow wizyte",
+    "gabinet",
+    "klinika",
+    "salon",
+    "centrum",
+    "studio",
+    "sklep",
+    "adres",
+    "telefon",
+    "nip",
+    "regon",
+    "krs",
+    "tel.",
+    "tel:",
+    "zespół",
+    "zespol",
+  ];
+
+  if (countSignalMatches(text, PUBLIC_INSTITUTION_SIGNALS) > 0) {
+    return false;
+  }
+
+  const businessScore = countSignalMatches(text, businessSignals);
+  const strongBusinessScore = countSignalMatches(text, STRONG_BUSINESS_SIGNALS);
+
+  return businessScore >= 3 || strongBusinessScore >= 1;
+}
+
+function findPhones(html?: string | null): string[] {
+  if (!html) {
+    return [];
+  }
+
+  const matches = html.match(/(?:\+?\d[\d\s()-]{7,}\d)/g) ?? [];
+  const phones = matches
+    .map((match) => match.replace(/[^\d+]/g, ""))
+    .filter((match) => {
+      const digits = match.replace(/\D/g, "");
+      return digits.length >= 9 && digits.length <= 12;
+    });
+
+  return [...new Set(phones)];
+}
+
+function pickLeadEmail(candidates: string[], url: string): string | null {
+  const domain = extractDomain(url).replace(/^www\./, "").toLowerCase();
+  const cleaned = candidates
+    .map((candidate) => candidate.trim().replace(/^%20/i, ""))
+    .filter((candidate) => candidate.includes("@"))
+    .filter((candidate) => !/[<>"'\s]/.test(candidate))
+    .filter((candidate) => !/\.(png|jpg|jpeg|gif|svg|webp)$/i.test(candidate))
+    .filter((candidate) => {
+      const normalized = candidate.toLowerCase();
+
+      return (
+        !normalized.startsWith("license@") &&
+        !normalized.startsWith("contact@prestashop") &&
+        !normalized.startsWith("noreply@") &&
+        !normalized.startsWith("no-reply@")
+      );
+    });
+
+  const sameDomain = cleaned.find((candidate) =>
+    candidate.toLowerCase().endsWith(`@${domain}`),
+  );
+
+  return sameDomain ?? cleaned[0] ?? null;
+}
+
+function evaluatePageQuality(
+  html: string,
+  url: string,
+  email: string | null,
+  phones: string[],
+): PageQualityDecision {
+  const normalizedText = normalizePageText(html);
+  const businessScore = countSignalMatches(normalizedText, BUSINESS_SIGNALS);
+  const strongBusinessScore = countSignalMatches(
+    normalizedText,
+    STRONG_BUSINESS_SIGNALS,
+  );
+  const editorialScore = countSignalMatches(normalizedText, EDITORIAL_SIGNALS);
+  const publicInstitutionScore = countSignalMatches(
+    normalizedText,
+    PUBLIC_INSTITUTION_SIGNALS,
+  );
+  const editorialPage = isEditorialPageContent(html);
+  const likelyBusinessPage = isLikelyBusinessPage(html);
+  const sameDomainEmail = hasSameDomainEmail(email, url);
+  const hasPhone = phones.length > 0;
+
+  if (isBlockedPageContent(html) || publicInstitutionScore > 0) {
+    return {
+      accepted: false,
+      reason: "Skipping blocked or public institution page:",
+    };
+  }
+
+  if (editorialPage && editorialScore >= 4 && businessScore < 5) {
+    return {
+      accepted: false,
+      reason: "Skipping editorial page:",
+    };
+  }
+
+  if (
+    editorialPage &&
+    !likelyBusinessPage &&
+    editorialScore >= 3 &&
+    strongBusinessScore === 0 &&
+    !sameDomainEmail
+  ) {
+    return {
+      accepted: false,
+      reason: "Skipping content-heavy page:",
+    };
+  }
+
+  if (businessScore < editorialScore && strongBusinessScore === 0) {
+    return {
+      accepted: false,
+      reason: "Skipping low business confidence page:",
+    };
+  }
+
+  if (!likelyBusinessPage && businessScore < 2 && !sameDomainEmail && !hasPhone) {
+    return {
+      accepted: false,
+      reason: "Skipping weak business signal:",
+    };
+  }
+
+  return {
+    accepted: true,
+    reason: "",
+  };
+}
+
+function getQueryIntentTerms(config: TaskConfig): string[] {
+  const entityTypes = new Set(config.entity_type ?? []);
+  const terms = new Set<string>();
+
+  if (
+    config.quality_filters.email_required ||
+    config.quality_filters.phone_required
+  ) {
+    terms.add("kontakt");
+  }
+
+  if (entityTypes.has("shop")) {
+    terms.add("sklep");
+  } else if (entityTypes.has("person") || entityTypes.has("influencer")) {
+    terms.add("studio");
+  } else if (entityTypes.has("mlm_prospect")) {
+    terms.add("wellness");
+  } else {
+    terms.add("uslugi");
+  }
+
+  return [...terms];
+}
+
+function getSearchLocation(config: TaskConfig): string {
+  const city = config.geo?.city?.trim();
+  const region = config.geo?.region?.trim();
+  const country = config.geo?.country?.trim();
+
+  if (city) {
+    return city;
+  }
+
+  if (region) {
+    return region;
+  }
+
+  if (country && country.length > 2) {
+    return country;
+  }
+
+  return "";
+}
+
+function joinQueryParts(...parts: Array<string | undefined | null>): string {
+  return parts
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeSignalText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizePageText(html: string): string {
+  const $ = cheerio.load(html);
+  const text = $("body").text() || html;
+
+  return normalizeSignalText(text);
+}
+
+function countSignalMatches(text: string, signals: string[]): number {
+  return signals.reduce((count, signal) => {
+    return count + (text.includes(signal) ? 1 : 0);
+  }, 0);
+}
+
+function hasSameDomainEmail(email: string | null, url: string): boolean {
+  if (!email) {
+    return false;
+  }
+
+  const domain = extractDomain(url).replace(/^www\./, "").toLowerCase();
+
+  return email.toLowerCase().endsWith(`@${domain}`);
 }
 
 function sleep(ms: number) {
