@@ -39,6 +39,10 @@ export type SearchAttemptDebug = {
   sampleLinks: string[];
   title: string;
   preview: string;
+  selectorCounts?: {
+    bAlgo: number;
+    bingRedirectAnchors: number;
+  };
   error?: string;
 };
 
@@ -168,6 +172,13 @@ export async function debugSearchQuery(
         sampleLinks: links.slice(0, 10),
         title: $("title").text().trim(),
         preview,
+        selectorCounts:
+          provider === "bing"
+            ? {
+                bAlgo: $("li.b_algo").length,
+                bingRedirectAnchors: $('a[href*="bing.com/ck/a"]').length,
+              }
+            : undefined,
       });
     } catch (error) {
       attempts.push({
@@ -251,6 +262,21 @@ function extractBingLinks(html: string): string[] {
     }
   });
 
+  $('a[href*="bing.com/ck/a"]').each((_, el) => {
+    const href = $(el).attr("href");
+    const text = $(el).text().replace(/\s+/g, " ").trim();
+
+    if (!href || !isUsefulBingAnchorText(text)) {
+      return;
+    }
+
+    const normalized = normalizeSearchLink(href);
+
+    if (normalized && isUsefulBingTarget(normalized)) {
+      links.push(normalized);
+    }
+  });
+
   return [...new Set(links)];
 }
 
@@ -313,6 +339,60 @@ function decodeBingTarget(encodedTarget?: string | null): string | null {
 
 function isUsefulLink(url?: string | null): url is string {
   return Boolean(url && url.startsWith("http") && !url.includes("duckduckgo"));
+}
+
+function isUsefulBingAnchorText(text: string): boolean {
+  if (!text) {
+    return false;
+  }
+
+  const normalized = text.toLowerCase();
+  const blocked = [
+    "przejdź do zawartości",
+    "opinia dotycząca ułatwień dostępu",
+    "english",
+    "wszystko",
+    "obrazy",
+    "wideo",
+    "mapy",
+    "wiadomości",
+    "zakupy",
+    "loty",
+    "podróże",
+    "narzędzia",
+    "prywatność",
+    "warunki",
+    "dowiedz się więcej",
+  ];
+
+  if (blocked.includes(normalized)) {
+    return false;
+  }
+
+  return text.length >= 8;
+}
+
+function isUsefulBingTarget(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const blockedHosts = [
+      "www.bing.com",
+      "bing.com",
+      "go.microsoft.com",
+      "support.microsoft.com",
+      "apps.apple.com",
+      "play.google.com",
+    ];
+
+    if (blockedHosts.includes(host)) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function extractDomain(url: string): string {
