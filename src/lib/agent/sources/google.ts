@@ -6,7 +6,7 @@ import { saveLead } from "../saveLead";
 
 type SearchEndpoint = {
   endpoint: string;
-  provider: "duckduckgo" | "bing";
+  provider: "duckduckgo" | "brave" | "bing";
 };
 
 const SEARCH_ENDPOINTS: SearchEndpoint[] = [
@@ -17,6 +17,10 @@ const SEARCH_ENDPOINTS: SearchEndpoint[] = [
   {
     endpoint: "https://lite.duckduckgo.com/lite/?q=",
     provider: "duckduckgo",
+  },
+  {
+    endpoint: "https://search.brave.com/search?source=web&q=",
+    provider: "brave",
   },
   {
     endpoint: "https://www.bing.com/search?cc=pl&setlang=pl&mkt=pl-PL&q=",
@@ -32,7 +36,7 @@ const SEARCH_HEADERS = {
 
 export type SearchAttemptDebug = {
   endpoint: string;
-  provider: "duckduckgo" | "bing";
+  provider: "duckduckgo" | "brave" | "bing";
   status?: number;
   htmlLength: number;
   linksFound: number;
@@ -42,6 +46,7 @@ export type SearchAttemptDebug = {
   selectorCounts?: {
     bAlgo: number;
     bingRedirectAnchors: number;
+    braveAnchors?: number;
   };
   error?: string;
 };
@@ -178,7 +183,13 @@ export async function debugSearchQuery(
                 bAlgo: $("li.b_algo").length,
                 bingRedirectAnchors: $('a[href*="bing.com/ck/a"]').length,
               }
-            : undefined,
+            : provider === "brave"
+              ? {
+                  bAlgo: 0,
+                  bingRedirectAnchors: 0,
+                  braveAnchors: $("a").length,
+                }
+              : undefined,
       });
     } catch (error) {
       attempts.push({
@@ -203,6 +214,10 @@ function extractLinks(
 ): string[] {
   if (provider === "bing") {
     return extractBingLinks(html);
+  }
+
+  if (provider === "brave") {
+    return extractBraveLinks(html);
   }
 
   return extractDuckDuckGoLinks(html);
@@ -275,6 +290,28 @@ function extractBingLinks(html: string): string[] {
     if (normalized && isUsefulBingTarget(normalized)) {
       links.push(normalized);
     }
+  });
+
+  return [...new Set(links)];
+}
+
+function extractBraveLinks(html: string): string[] {
+  const links: string[] = [];
+  const $ = cheerio.load(html);
+
+  $("a").each((_, el) => {
+    const href = $(el).attr("href");
+    const text = $(el).text().replace(/\s+/g, " ").trim();
+
+    if (!href) {
+      return;
+    }
+
+    if (!isUsefulBraveLink(href, text)) {
+      return;
+    }
+
+    links.push(href);
   });
 
   return [...new Set(links)];
@@ -393,6 +430,50 @@ function isUsefulBingTarget(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isUsefulBraveLink(href: string, text: string): boolean {
+  if (!href.startsWith("http")) {
+    return false;
+  }
+
+  if (href.startsWith("tel:")) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(href);
+    const host = parsed.hostname.toLowerCase();
+    const blockedHosts = [
+      "search.brave.com",
+      "brave.com",
+      "www.youtube.com",
+      "youtube.com",
+      "www.instagram.com",
+      "instagram.com",
+      "play.google.com",
+      "apps.apple.com",
+    ];
+
+    if (blockedHosts.includes(host)) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  const normalizedText = text.toLowerCase();
+
+  if (
+    !text ||
+    normalizedText === "google" ||
+    normalizedText === "bing" ||
+    normalizedText === "mojeek"
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function extractDomain(url: string): string {
