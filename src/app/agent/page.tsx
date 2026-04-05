@@ -128,6 +128,22 @@ export default function AgentDashboard() {
                 </p>
               </div>
             </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                href={`/agent/tasks/${task.id}`}
+                className="inline-flex rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+              >
+                Podgląd taska
+              </Link>
+
+              <Link
+                href="/agent/leads"
+                className="inline-flex rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+              >
+                Zobacz leady
+              </Link>
+            </div>
           </article>
         ))}
 
@@ -175,12 +191,21 @@ export default function AgentDashboard() {
                   </td>
 
                   <td className="px-5 py-4">
-                    <Link
-                      href="/agent/leads"
-                      className="inline-flex rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-                    >
-                      Zobacz leady
-                    </Link>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href={`/agent/tasks/${task.id}`}
+                        className="inline-flex rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                      >
+                        Podgląd taska
+                      </Link>
+
+                      <Link
+                        href="/agent/leads"
+                        className="inline-flex rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+                      >
+                        Zobacz leady
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}

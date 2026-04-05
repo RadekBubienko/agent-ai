@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server"
 import { TaskConfig } from "@/types/agent"
 import { startAgentJob } from "@/lib/agent/runner"
 import { saveTask } from "@/lib/agent/tasks"
+import { logTaskEvent } from "@/lib/agent/taskLogs"
 
 export const maxDuration = 300
 
@@ -17,6 +18,14 @@ export async function POST(req: Request) {
   }
 
   const task = await saveTask(body)
+
+  await logTaskEvent(task.id, "Task utworzony", {
+    details: {
+      sources: body.sources,
+      keywords: body.industry?.keywords ?? [],
+      limit: body.limit,
+    },
+  })
 
   after(async () => {
     await startAgentJob(task.id, body)

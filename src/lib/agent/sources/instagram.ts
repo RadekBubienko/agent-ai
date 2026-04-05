@@ -1,5 +1,6 @@
 import type { DbClient, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
+import { logTaskEvent } from "../taskLogs"
 
 export async function crawlInstagram(
   db: DbClient,
@@ -14,9 +15,13 @@ export async function crawlInstagram(
   const hashtags = buildHashtags(config)
 
   console.log("Hashtags:", hashtags)
+  await logTaskEvent(taskId, "Instagram: start crawlera", {
+    details: { hashtags },
+  })
 
   for (const hashtag of hashtags) {
     console.log("Searching hashtag:", hashtag)
+    await logTaskEvent(taskId, `Instagram: hashtag #${hashtag}`)
 
     const url =
       "https://www.instagram.com/explore/tags/" +
@@ -34,6 +39,12 @@ export async function crawlInstagram(
       const profiles = extractProfiles(html)
 
       console.log("Profiles found:", profiles.length)
+      await logTaskEvent(taskId, "Instagram: znalezione profile", {
+        details: {
+          hashtag,
+          profiles: profiles.length,
+        },
+      })
 
       for (const profile of profiles) {
         if (leadsSaved >= limit) {
@@ -55,12 +66,26 @@ export async function crawlInstagram(
 
         if (result.created) {
           leadsSaved++
+          await logTaskEvent(taskId, `Instagram: zapisano profil ${profile}`, {
+            level: "success",
+            details: {
+              website: lead.website,
+            },
+          })
         }
       }
     } catch {
       console.log("Instagram fetch failed:", hashtag)
+      await logTaskEvent(taskId, `Instagram: błąd dla #${hashtag}`, {
+        level: "error",
+      })
     }
   }
+
+  await logTaskEvent(taskId, "Instagram: koniec crawlera", {
+    level: "success",
+    details: { leadsSaved },
+  })
 
   return leadsSaved
 }

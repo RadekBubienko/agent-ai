@@ -3,6 +3,7 @@ import { fetchWebsite } from "@/lib/ai/fetchWebsite";
 import { findEmails } from "@/lib/ai/findEmails";
 import type { DbClient, TaskConfig } from "@/types/agent";
 import { saveLead } from "../saveLead";
+import { logTaskEvent } from "../taskLogs";
 
 type SearchEndpoint = {
   endpoint: string;
@@ -217,6 +218,9 @@ export async function crawlGoogle(
   const queries = buildQueries(config);
 
   console.log("Generated queries:", queries);
+  await logTaskEvent(taskId, "Google: przygotowano zapytania", {
+    details: { queries },
+  });
 
   for (const query of queries) {
     if (leadsSaved >= limit || pagesInspected >= maxPagesToInspect) {
@@ -230,6 +234,7 @@ export async function crawlGoogle(
     }
 
     console.log("Search query:", query);
+    await logTaskEvent(taskId, `Google: zapytanie "${query}"`);
 
     const links = (await searchLinks(query)).filter((link) =>
       isAllowedSearchResult(link),
@@ -245,6 +250,13 @@ export async function crawlGoogle(
 
     console.log("Links found:", links.length);
     console.log("Links selected for inspection:", candidateLinks.length);
+    await logTaskEvent(taskId, "Google: znaleziono kandydatów", {
+      details: {
+        query,
+        linksFound: links.length,
+        selected: candidateLinks.length,
+      },
+    });
 
     for (const link of candidateLinks) {
       if (leadsSaved >= limit) {
@@ -323,11 +335,24 @@ export async function crawlGoogle(
 
       if (result.created) {
         leadsSaved++;
+        await logTaskEvent(taskId, `Google: zapisano lead ${domain}`, {
+          level: "success",
+          details: {
+            website: link,
+            email,
+            leadsSaved,
+          },
+        });
       }
     }
 
     await sleep(2000);
   }
+
+  await logTaskEvent(taskId, "Google: crawler zakończony", {
+    level: "success",
+    details: { leadsSaved },
+  });
 
   return leadsSaved;
 }
