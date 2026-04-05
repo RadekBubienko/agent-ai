@@ -5,6 +5,7 @@ const polishDateTimeFormatter = new Intl.DateTimeFormat("pl-PL", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  second: "2-digit",
   hour12: false,
 });
 
@@ -28,5 +29,5 @@ export function formatPolishDateTime(
       .map((part) => [part.type, part.value]),
   );
 
-  return `${values.day}.${values.month}.${values.year} - ${values.hour}:${values.minute}`;
+  return `${values.day}.${values.month}.${values.year} - ${values.hour}:${values.minute}:${values.second}`;
 }
