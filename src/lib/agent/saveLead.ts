@@ -25,6 +25,24 @@ type SaveLeadOptions = {
   taskId?: string | null;
 };
 
+async function incrementTaskLeadCount(
+  db: DbClient,
+  taskId?: string | null,
+): Promise<void> {
+  if (!taskId) {
+    return;
+  }
+
+  await db.query(
+    `
+    UPDATE agent_tasks
+    SET leads_found = COALESCE(leads_found, 0) + 1
+    WHERE id = ?
+    `,
+    [taskId],
+  );
+}
+
 export async function saveLead(
   db: DbClient,
   lead: LeadInput,
@@ -68,8 +86,8 @@ export async function saveLead(
   const [result] = await db.query<ResultSetHeader>(
     `
     INSERT INTO leads
-    (name,email,website,domain,source,platform,task_id,lead_type,fit_score,intent_score,engagement_score,total_score,segment)
-    VALUES (?,?,?,?,?,?,?,'agent',0,0,0,0,'cold')
+    (name,email,website,domain,source,platform,task_id,lead_type,fit_score,intent_score,engagement_score,total_score,segment,created_at)
+    VALUES (?,?,?,?,?,?,?,'agent',0,0,0,0,'cold',?)
     `,
     [
       lead.name ?? null,
@@ -79,10 +97,13 @@ export async function saveLead(
       source,
       platform,
       taskId,
+      new Date(),
     ],
   );
 
   const leadId = result.insertId;
+
+  await incrementTaskLeadCount(db, taskId);
 
   try {
     const scores = await scoreLead(lead);

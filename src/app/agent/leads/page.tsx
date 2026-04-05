@@ -60,8 +60,13 @@ export default function AgentLeadsPage() {
 
     void loadLeads();
 
+    const interval = window.setInterval(() => {
+      void loadLeads();
+    }, 5000);
+
     return () => {
       active = false;
+      window.clearInterval(interval);
     };
   }, [platform, segment]);
 

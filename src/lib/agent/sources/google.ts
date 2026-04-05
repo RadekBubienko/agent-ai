@@ -34,6 +34,8 @@ const SEARCH_HEADERS = {
   "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 };
 
+const SEARCH_REQUEST_TIMEOUT_MS = 8000;
+
 const BLOCKED_HOST_PATTERNS = [
   "facebook.com",
   "instagram.com",
@@ -209,25 +211,53 @@ export async function crawlGoogle(
   const limit = config.limit || 50;
   let leadsSaved = 0;
   const seenDomains = new Set<string>();
+  const maxPagesToInspect = Math.max(limit * 5, 20);
+  let pagesInspected = 0;
 
   const queries = buildQueries(config);
 
   console.log("Generated queries:", queries);
 
   for (const query of queries) {
+    if (leadsSaved >= limit || pagesInspected >= maxPagesToInspect) {
+      console.log("Stopping search crawler early", {
+        leadsSaved,
+        limit,
+        pagesInspected,
+        maxPagesToInspect,
+      });
+      return leadsSaved;
+    }
+
     console.log("Search query:", query);
 
     const links = (await searchLinks(query)).filter((link) =>
       isAllowedSearchResult(link),
     );
+    const remainingLeads = Math.max(limit - leadsSaved, 1);
+    const remainingPages = Math.max(maxPagesToInspect - pagesInspected, 0);
+    const maxLinksThisQuery = Math.min(
+      links.length,
+      Math.max(remainingLeads * 3, 6),
+      remainingPages,
+    );
+    const candidateLinks = links.slice(0, maxLinksThisQuery);
 
     console.log("Links found:", links.length);
+    console.log("Links selected for inspection:", candidateLinks.length);
 
-    for (const link of links) {
+    for (const link of candidateLinks) {
       if (leadsSaved >= limit) {
-        console.log("Limit reached:", limit);
+        console.log("Lead limit reached:", limit);
         return leadsSaved;
       }
+
+      if (pagesInspected >= maxPagesToInspect) {
+        console.log("Page inspection limit reached:", maxPagesToInspect);
+        return leadsSaved;
+      }
+
+      pagesInspected++;
 
       const domain = extractDomain(link).toLowerCase();
 
@@ -352,6 +382,8 @@ export async function debugSearchQuery(
       const res = await fetch(url, {
         headers: SEARCH_HEADERS,
         cache: "no-store",
+        redirect: "follow",
+        signal: AbortSignal.timeout(SEARCH_REQUEST_TIMEOUT_MS),
       });
 
       const html = await res.text();

@@ -72,8 +72,8 @@ async function createLeadWithSequence(
   segment: "product" | "business" | "education",
 ) {
   const [result] = await db.execute<ResultSetHeader>(
-    "INSERT INTO leads (name, email, ip_address, segment) VALUES (?, ?, ?, ?)",
-    [name, email, ip, segment],
+    "INSERT INTO leads (name, email, ip_address, segment, created_at) VALUES (?, ?, ?, ?, ?)",
+    [name, email, ip, segment, new Date()],
   );
 
   const leadId = result.insertId;
