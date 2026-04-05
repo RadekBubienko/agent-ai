@@ -1,6 +1,6 @@
 import type { ResultSetHeader } from "mysql2/promise";
 import { scoreLead } from "@/lib/ai/leadScoring";
-import type { DbClient, LeadInput } from "@/types/agent";
+import type { DbClient, LeadInput, SaveLeadResult } from "@/types/agent";
 import { findDuplicate } from "./dedup";
 
 function normalizeDomain(url?: string | null): string | null {
@@ -21,18 +21,44 @@ function normalizeDomain(url?: string | null): string | null {
   }
 }
 
-export async function saveLead(db: DbClient, lead: LeadInput) {
+type SaveLeadOptions = {
+  taskId?: string | null;
+};
+
+export async function saveLead(
+  db: DbClient,
+  lead: LeadInput,
+  options: SaveLeadOptions = {},
+): Promise<SaveLeadResult> {
   const duplicate = await findDuplicate(db, lead);
+  const taskId = options.taskId ?? null;
+  const source = lead.source ?? "agent";
+  const platform = lead.platform ?? null;
 
   if (duplicate) {
     console.log("duplicate lead:", duplicate);
 
     await db.query(
-      "UPDATE leads SET source = CONCAT(source, ',agent') WHERE id = ?",
-      [duplicate],
+      `
+      UPDATE leads
+      SET
+        source = CASE
+          WHEN source IS NULL OR source = '' THEN ?
+          WHEN FIND_IN_SET(?, source) > 0 THEN source
+          ELSE CONCAT(source, ',', ?)
+        END,
+        platform = COALESCE(platform, ?),
+        task_id = COALESCE(task_id, ?),
+        lead_type = CASE
+          WHEN lead_type IS NULL OR lead_type = 'inbound' THEN 'agent'
+          ELSE lead_type
+        END
+      WHERE id = ?
+      `,
+      [source, source, source, platform, taskId, duplicate],
     );
 
-    return duplicate;
+    return { id: duplicate, created: false };
   }
 
   const domain =
@@ -42,42 +68,48 @@ export async function saveLead(db: DbClient, lead: LeadInput) {
   const [result] = await db.query<ResultSetHeader>(
     `
     INSERT INTO leads
-    (name,email,website,domain,source,platform,fit_score,intent_score,engagement_score,total_score,segment)
-    VALUES (?,?,?,?,?, ?,0,0,0,0,'cold')
+    (name,email,website,domain,source,platform,task_id,lead_type,fit_score,intent_score,engagement_score,total_score,segment)
+    VALUES (?,?,?,?,?,?,?,'agent',0,0,0,0,'cold')
     `,
     [
       lead.name ?? null,
       lead.email || null,
       lead.website ?? null,
       domain,
-      lead.source ?? null,
-      lead.platform || null,
+      source,
+      platform,
+      taskId,
     ],
   );
 
   const leadId = result.insertId;
-  const scores = await scoreLead(lead);
 
-  await db.query(
-    `
-    UPDATE leads
-    SET
-    fit_score=?,
-    intent_score=?,
-    engagement_score=?,
-    total_score=?,
-    segment=?
-    WHERE id=?
-    `,
-    [
-      scores.fit_score,
-      scores.intent_score,
-      scores.engagement_score,
-      scores.total_score,
-      scores.segment,
-      leadId,
-    ],
-  );
+  try {
+    const scores = await scoreLead(lead);
 
-  return leadId;
+    await db.query(
+      `
+      UPDATE leads
+      SET
+      fit_score=?,
+      intent_score=?,
+      engagement_score=?,
+      total_score=?,
+      segment=?
+      WHERE id=?
+      `,
+      [
+        scores.fit_score,
+        scores.intent_score,
+        scores.engagement_score,
+        scores.total_score,
+        scores.segment,
+        leadId,
+      ],
+    );
+  } catch (error) {
+    console.error("Lead scoring failed:", error);
+  }
+
+  return { id: leadId, created: true };
 }

@@ -3,7 +3,11 @@ import { findEmails } from "@/lib/ai/findEmails";
 import type { DbClient, TaskConfig } from "@/types/agent";
 import { saveLead } from "../saveLead";
 
-export async function crawlGoogle(db: DbClient, config: TaskConfig) {
+export async function crawlGoogle(
+  db: DbClient,
+  config: TaskConfig,
+  taskId: string,
+) {
   console.log("Search crawler started");
   console.log("Task config:", config);
 
@@ -37,7 +41,7 @@ export async function crawlGoogle(db: DbClient, config: TaskConfig) {
     for (const link of links) {
       if (leadsSaved >= limit) {
         console.log("Limit reached:", limit);
-        return;
+        return leadsSaved;
       }
 
       const htmlPage = await fetchWebsite(link);
@@ -63,13 +67,17 @@ export async function crawlGoogle(db: DbClient, config: TaskConfig) {
 
       console.log("Saving lead:", lead);
 
-      await saveLead(db, lead);
+      const result = await saveLead(db, lead, { taskId });
 
-      leadsSaved++;
+      if (result.created) {
+        leadsSaved++;
+      }
     }
 
     await sleep(2000);
   }
+
+  return leadsSaved;
 }
 
 function buildQueries(config: TaskConfig): string[] {

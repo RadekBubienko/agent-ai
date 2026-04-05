@@ -33,6 +33,11 @@ export type LeadInput = {
   platform?: string | null
 }
 
+export type SaveLeadResult = {
+  id: number
+  created: boolean
+}
+
 export type LeadScore = {
   fit_score: number
   intent_score: number

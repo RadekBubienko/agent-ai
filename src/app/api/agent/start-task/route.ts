@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server"
+import { after, NextResponse } from "next/server"
 import { TaskConfig } from "@/types/agent"
 import { startAgentJob } from "@/lib/agent/runner"
 import { saveTask } from "@/lib/agent/tasks"
+
+export const maxDuration = 300
 
 export async function POST(req: Request) {
 
@@ -16,7 +18,9 @@ export async function POST(req: Request) {
 
   const task = await saveTask(body)
 
-  startAgentJob(task.id, body)
+  after(async () => {
+    await startAgentJob(task.id, body)
+  })
 
   return NextResponse.json({
     status: "started",

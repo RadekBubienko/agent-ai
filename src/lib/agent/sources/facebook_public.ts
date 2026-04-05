@@ -2,10 +2,15 @@ import * as cheerio from "cheerio"
 import type { DbClient, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
 
-export async function crawlFacebook(db: DbClient, config: TaskConfig) {
+export async function crawlFacebook(
+  db: DbClient,
+  config: TaskConfig,
+  taskId: string,
+) {
   console.log("Facebook crawler started")
 
   const keywords = config.industry?.keywords || []
+  let leadsSaved = 0
 
   for (const keyword of keywords) {
     try {
@@ -38,11 +43,15 @@ export async function crawlFacebook(db: DbClient, config: TaskConfig) {
           name: keyword + " lead",
           email: emailMatch ? emailMatch[0] : null,
           website: websiteMatch ? websiteMatch[0] : null,
-          source: "facebook",
+          source: "agent",
           platform: "facebook",
         }
 
-        await saveLead(db, lead)
+        const result = await saveLead(db, lead, { taskId })
+
+        if (result.created) {
+          leadsSaved++
+        }
       }
 
       await new Promise((resolve) => setTimeout(resolve, 3000))
@@ -52,4 +61,6 @@ export async function crawlFacebook(db: DbClient, config: TaskConfig) {
   }
 
   console.log("Facebook crawler finished")
+
+  return leadsSaved
 }

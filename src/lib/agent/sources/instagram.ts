@@ -1,7 +1,11 @@
 import type { DbClient, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
 
-export async function crawlInstagram(db: DbClient, config: TaskConfig) {
+export async function crawlInstagram(
+  db: DbClient,
+  config: TaskConfig,
+  taskId: string,
+) {
   console.log("Instagram crawler started")
 
   const limit = config.limit || 50
@@ -34,7 +38,7 @@ export async function crawlInstagram(db: DbClient, config: TaskConfig) {
       for (const profile of profiles) {
         if (leadsSaved >= limit) {
           console.log("Instagram limit reached:", limit)
-          return
+          return leadsSaved
         }
 
         const lead = {
@@ -47,14 +51,18 @@ export async function crawlInstagram(db: DbClient, config: TaskConfig) {
 
         console.log("Saving lead:", lead)
 
-        await saveLead(db, lead)
+        const result = await saveLead(db, lead, { taskId })
 
-        leadsSaved++
+        if (result.created) {
+          leadsSaved++
+        }
       }
     } catch {
       console.log("Instagram fetch failed:", hashtag)
     }
   }
+
+  return leadsSaved
 }
 
 function buildHashtags(config: TaskConfig): string[] {
