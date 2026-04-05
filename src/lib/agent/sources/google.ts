@@ -4,10 +4,24 @@ import { findEmails } from "@/lib/ai/findEmails";
 import type { DbClient, TaskConfig } from "@/types/agent";
 import { saveLead } from "../saveLead";
 
-const SEARCH_ENDPOINTS = [
-  "https://html.duckduckgo.com/html/?q=",
-  "https://lite.duckduckgo.com/lite/?q=",
-  "https://duckduckgo.com/html/?q=",
+type SearchEndpoint = {
+  endpoint: string;
+  provider: "duckduckgo" | "bing";
+};
+
+const SEARCH_ENDPOINTS: SearchEndpoint[] = [
+  {
+    endpoint: "https://html.duckduckgo.com/html/?q=",
+    provider: "duckduckgo",
+  },
+  {
+    endpoint: "https://lite.duckduckgo.com/lite/?q=",
+    provider: "duckduckgo",
+  },
+  {
+    endpoint: "https://www.bing.com/search?cc=pl&setlang=pl&mkt=pl-PL&q=",
+    provider: "bing",
+  },
 ];
 
 const SEARCH_HEADERS = {
@@ -18,6 +32,7 @@ const SEARCH_HEADERS = {
 
 export type SearchAttemptDebug = {
   endpoint: string;
+  provider: "duckduckgo" | "bing";
   status?: number;
   htmlLength: number;
   linksFound: number;
@@ -127,7 +142,7 @@ export async function debugSearchQuery(
 ): Promise<SearchAttemptDebug[]> {
   const attempts: SearchAttemptDebug[] = [];
 
-  for (const endpoint of SEARCH_ENDPOINTS) {
+  for (const { endpoint, provider } of SEARCH_ENDPOINTS) {
     try {
       const url = endpoint + encodeURIComponent(query);
       const res = await fetch(url, {
@@ -136,7 +151,7 @@ export async function debugSearchQuery(
       });
 
       const html = await res.text();
-      const links = extractLinks(html);
+      const links = extractLinks(html, provider);
       const $ = cheerio.load(html);
       const preview = $("body")
         .text()
@@ -146,6 +161,7 @@ export async function debugSearchQuery(
 
       attempts.push({
         endpoint,
+        provider,
         status: res.status,
         htmlLength: html.length,
         linksFound: links.length,
@@ -156,6 +172,7 @@ export async function debugSearchQuery(
     } catch (error) {
       attempts.push({
         endpoint,
+        provider,
         htmlLength: 0,
         linksFound: 0,
         sampleLinks: [],
@@ -169,7 +186,18 @@ export async function debugSearchQuery(
   return attempts;
 }
 
-function extractLinks(html: string): string[] {
+function extractLinks(
+  html: string,
+  provider: SearchEndpoint["provider"],
+): string[] {
+  if (provider === "bing") {
+    return extractBingLinks(html);
+  }
+
+  return extractDuckDuckGoLinks(html);
+}
+
+function extractDuckDuckGoLinks(html: string): string[] {
   const links: string[] = [];
   const regex = /uddg=([^&"]+)/g;
   let match: RegExpExecArray | null;
@@ -199,6 +227,33 @@ function extractLinks(html: string): string[] {
   return [...new Set(links)];
 }
 
+function extractBingLinks(html: string): string[] {
+  const links: string[] = [];
+  const $ = cheerio.load(html);
+
+  $("li.b_algo").each((_, el) => {
+    const text = $(el).text().replace(/\s+/g, " ").trim();
+
+    if (!text || text.length > 1000 || text.includes("{")) {
+      return;
+    }
+
+    const href = $(el).find("h2 a").first().attr("href");
+
+    if (!href) {
+      return;
+    }
+
+    const normalized = normalizeSearchLink(href);
+
+    if (normalized) {
+      links.push(normalized);
+    }
+  });
+
+  return [...new Set(links)];
+}
+
 function normalizeSearchLink(href: string): string | null {
   try {
     if (href.startsWith("//duckduckgo.com/l/?uddg=")) {
@@ -216,6 +271,14 @@ function normalizeSearchLink(href: string): string | null {
     }
 
     if (href.startsWith("http")) {
+      if (href.includes("bing.com/ck/a")) {
+        const url = new URL(href);
+        const encodedTarget = url.searchParams.get("u");
+        const target = decodeBingTarget(encodedTarget);
+
+        return isUsefulLink(target) ? target : null;
+      }
+
       return isUsefulLink(href) ? href : null;
     }
 
@@ -229,6 +292,23 @@ function normalizeSearchLink(href: string): string | null {
   }
 
   return null;
+}
+
+function decodeBingTarget(encodedTarget?: string | null): string | null {
+  if (!encodedTarget) {
+    return null;
+  }
+
+  try {
+    const payload = encodedTarget.startsWith("a1")
+      ? encodedTarget.slice(2)
+      : encodedTarget;
+    const decoded = Buffer.from(payload, "base64").toString("utf8");
+
+    return decoded || null;
+  } catch {
+    return null;
+  }
 }
 
 function isUsefulLink(url?: string | null): url is string {
