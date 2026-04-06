@@ -270,7 +270,7 @@ export default function AgentLeadsPage() {
               >
                 <option value="">Wszystkie platformy</option>
                 <option value="search">Google / Search</option>
-                <option value="facebook">Facebook</option>
+                <option value="facebook">Facebook / Own Page</option>
                 <option value="facebook_comments">Facebook Comments</option>
                 <option value="instagram">Instagram</option>
               </select>

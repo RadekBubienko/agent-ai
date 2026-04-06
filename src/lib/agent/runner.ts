@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent";
 import { crawlFacebookComments } from "./sources/facebook_comments";
-import { crawlFacebook } from "./sources/facebook_public";
+import { crawlFacebook } from "./sources/facebook";
 import { crawlGoogle } from "./sources/google";
 import { crawlInstagram } from "./sources/instagram";
 import { logTaskEvent } from "./taskLogs";

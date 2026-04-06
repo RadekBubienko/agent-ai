@@ -19,6 +19,13 @@ export type TaskConfig = {
     phone_required: boolean
     website_required: boolean
   }
+  facebook?: {
+    page_id?: string
+    days_back?: number
+    scan_entire_page?: boolean
+    include_comments?: boolean
+    include_reactions?: boolean
+  }
   limit: number
   speed: string
 }

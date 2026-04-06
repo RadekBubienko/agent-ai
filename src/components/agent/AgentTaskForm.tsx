@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { TaskConfig } from "@/types/agent";
 
 const KEYWORD_SUGGESTION_GROUPS = [
   {
@@ -43,29 +44,6 @@ const KEYWORD_SUGGESTION_GROUPS = [
     suggestions: ["longevity", "medycyna funkcjonalna", "wellness"],
   },
 ];
-
-type TaskConfig = {
-  geo: {
-    mode: string;
-    country: string;
-    region: string;
-    city: string;
-    radius_km: number;
-  };
-  industry: {
-    keywords: string[];
-    pkd: string[];
-  };
-  entity_type: string[];
-  sources: string[];
-  quality_filters: {
-    email_required: boolean;
-    phone_required: boolean;
-    website_required: boolean;
-  };
-  limit: number;
-  speed: "fast" | "medium" | "slow";
-};
 
 function normalizeKeyword(value: string) {
   return value
@@ -137,6 +115,13 @@ export default function AgentTaskForm() {
       email_required: true,
       phone_required: false,
       website_required: true,
+    },
+    facebook: {
+      page_id: "",
+      days_back: 30,
+      scan_entire_page: true,
+      include_comments: true,
+      include_reactions: true,
     },
     limit: 200,
     speed: "slow",
@@ -519,9 +504,132 @@ export default function AgentTaskForm() {
                 checked={form.sources.includes(src)}
                 onChange={() => toggleArray("sources", src)}
               />{" "}
-              {src === "facebook_comments" ? "Facebook (komentarze)" : src}
+              {src === "facebook"
+                ? "Facebook - Owned Page Hunter"
+                : src === "facebook_comments"
+                  ? "Facebook (komentarze)"
+                  : src}
             </label>
           ))}
+
+          {form.sources.includes("facebook") ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-sm font-medium text-emerald-900">
+                Facebook - Owned Page Lead Hunter
+              </p>
+              <p className="mt-1 text-sm text-emerald-800">
+                Ten tryb skanuje Wasza wlasna strone przez Graph API, przeglada
+                posty z wybranego okresu i szuka osob reagujacych lub
+                komentujacych.
+              </p>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-emerald-900">
+                    Dni wstecz
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    className="w-full rounded border border-emerald-200 bg-white p-2"
+                    value={form.facebook?.days_back ?? 30}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        facebook: {
+                          ...form.facebook,
+                          days_back: Number(e.target.value),
+                        },
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-emerald-900">
+                    Opcjonalny Page ID
+                  </span>
+                  <input
+                    className="w-full rounded border border-emerald-200 bg-white p-2"
+                    placeholder="Domyslnie z .env"
+                    value={form.facebook?.page_id ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        facebook: {
+                          ...form.facebook,
+                          page_id: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 space-y-2 text-sm text-emerald-900">
+                <label className="block">
+                  <input
+                    type="checkbox"
+                    checked={form.facebook?.scan_entire_page ?? true}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        facebook: {
+                          ...form.facebook,
+                          scan_entire_page: e.target.checked,
+                        },
+                      })
+                    }
+                  />{" "}
+                  przeskanuj cala strone, nie tylko posty trafiajace w slowa
+                  kluczowe
+                </label>
+
+                <label className="block">
+                  <input
+                    type="checkbox"
+                    checked={form.facebook?.include_comments ?? true}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        facebook: {
+                          ...form.facebook,
+                          include_comments: e.target.checked,
+                        },
+                      })
+                    }
+                  />{" "}
+                  analizuj komentarze
+                </label>
+
+                <label className="block">
+                  <input
+                    type="checkbox"
+                    checked={form.facebook?.include_reactions ?? true}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        facebook: {
+                          ...form.facebook,
+                          include_reactions: e.target.checked,
+                        },
+                      })
+                    }
+                  />{" "}
+                  probuj pobrac reakcje i lajki
+                </label>
+              </div>
+
+              {form.quality_filters.email_required ? (
+                <p className="mt-3 text-sm text-amber-800">
+                  Uwaga: dla Owned Page Huntera email zwykle nie jest dostepny.
+                  Jesli zalezy Ci na kontaktach do rozmowy na Facebooku, rozważ
+                  odznaczenie filtra &quot;wymagany email&quot;.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <h4 className="pt-4 font-medium">Filtry jakosci</h4>
 
