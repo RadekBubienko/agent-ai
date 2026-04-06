@@ -496,9 +496,11 @@ export async function crawlGoogle(
 
 function buildQueries(config: TaskConfig): string[] {
   const queries = new Set<string>();
-  const keywords = (config.industry?.keywords || [])
-    .map((keyword) => keyword.trim().replace(/\s+/g, " "))
-    .filter(Boolean);
+  const keywords = uniqueNormalizedStrings(
+    (config.industry?.keywords || [])
+      .map((keyword) => keyword.trim().replace(/\s+/g, " "))
+      .filter(Boolean),
+  );
   const location = getSearchLocation(config);
   const modifiers = getBusinessModifiers(config);
   const intentTerms = getQueryIntentTerms(config);
@@ -509,10 +511,17 @@ function buildQueries(config: TaskConfig): string[] {
     const normalizedKeyword = normalizeSignalText(keyword);
     const broadKeywordLeadTerms = getBroadKeywordLeadTerms(keyword, config);
     const broadKeyword = broadKeywordLeadTerms.length > 0;
+    const semanticKeywordAlternatives = getSemanticKeywordAlternatives(
+      keyword,
+      config.speed,
+    );
     const searchExclusionTerms = getSearchExclusionTerms(keyword);
     const variants = [
       ...broadKeywordLeadTerms.map((term) =>
         joinQueryParts(keyword, term, location),
+      ),
+      ...semanticKeywordAlternatives.map((alternative) =>
+        joinQueryParts(alternative, location),
       ),
       joinQueryParts(keyword, location),
       ...strongIntentTerms.map((term) => joinQueryParts(keyword, term, location)),
@@ -543,7 +552,7 @@ function buildQueries(config: TaskConfig): string[] {
     }
   }
 
-  return [...queries].filter(Boolean);
+  return uniqueNormalizedStrings([...queries].filter(Boolean));
 }
 
 async function searchLinks(query: string): Promise<string[]> {
@@ -1016,7 +1025,13 @@ function isHealthLikeKeyword(normalizedKeyword: string): boolean {
     normalizedKeyword.includes("samolecz") ||
     normalizedKeyword.includes("wellness") ||
     normalizedKeyword.includes("terap") ||
-    normalizedKeyword.includes("rehabil")
+    normalizedKeyword.includes("rehabil") ||
+    normalizedKeyword.includes("autoterap") ||
+    normalizedKeyword.includes("biohack") ||
+    normalizedKeyword.includes("holistycz") ||
+    normalizedKeyword.includes("integracyj") ||
+    normalizedKeyword.includes("funkcjonal") ||
+    normalizedKeyword.includes("longevity")
   );
 }
 
@@ -1034,6 +1049,12 @@ function isBroadLeadKeyword(normalizedKeyword: string): boolean {
     "uroda",
     "wellness",
     "samoleczenie",
+    "autoterapia",
+    "biohacking",
+    "terapia holistyczna",
+    "medycyna integracyjna",
+    "medycyna funkcjonalna",
+    "longevity",
     "mlm",
     "kosmetyka",
     "kosmetologia",
@@ -1049,6 +1070,52 @@ function isBroadLeadKeyword(normalizedKeyword: string): boolean {
   return broadKeywordPatterns.some((pattern) =>
     normalizedKeyword.includes(pattern),
   );
+}
+
+function getSemanticKeywordAlternatives(
+  keyword: string,
+  speed?: string,
+): string[] {
+  const normalizedKeyword = normalizeSignalText(keyword);
+  const alternatives: string[] = [];
+
+  if (normalizedKeyword.includes("samolecz")) {
+    alternatives.push(
+      "autoterapia",
+      "terapia holistyczna",
+      "medycyna integracyjna",
+      "biohacking",
+    );
+  }
+
+  if (normalizedKeyword === "zdrowie" || normalizedKeyword.includes("wellness")) {
+    alternatives.push("biohacking", "longevity", "medycyna funkcjonalna");
+  }
+
+  if (normalizedKeyword === "uroda") {
+    alternatives.push("medycyna estetyczna", "kosmetologia", "beauty clinic");
+  }
+
+  const normalizedAlternatives = uniqueNormalizedStrings(
+    alternatives.filter((alternative) => {
+      const normalizedAlternative = normalizeSignalText(alternative);
+
+      return (
+        normalizedAlternative !== normalizedKeyword &&
+        !normalizedKeyword.includes(normalizedAlternative)
+      );
+    }),
+  );
+
+  if (speed === "fast") {
+    return normalizedAlternatives.slice(0, 1);
+  }
+
+  if (speed === "slow") {
+    return normalizedAlternatives.slice(0, 3);
+  }
+
+  return normalizedAlternatives.slice(0, 2);
 }
 
 function getSearchExclusionTerms(keyword: string): string[] {
@@ -1619,6 +1686,21 @@ function normalizeSignalText(text: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function uniqueNormalizedStrings(items: string[]): string[] {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    const normalized = normalizeSignalText(item);
+
+    if (!normalized || seen.has(normalized)) {
+      return false;
+    }
+
+    seen.add(normalized);
+    return true;
+  });
 }
 
 function normalizePageText(html: string): string {
