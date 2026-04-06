@@ -272,6 +272,7 @@ export async function crawlGoogle(
   let skippedUnreachable = 0;
   let skippedMissingEmail = 0;
   let skippedMissingPhone = 0;
+  const qualitySkipReasonCounts: Record<string, number> = {};
 
   const queries = buildQueries(config);
 
@@ -413,6 +414,8 @@ export async function crawlGoogle(
         if (!qualityDecision.accepted) {
           console.log(qualityDecision.reason, link);
           skippedQualityOrContent++;
+          qualitySkipReasonCounts[qualityDecision.reason] =
+            (qualitySkipReasonCounts[qualityDecision.reason] ?? 0) + 1;
           continue;
         }
       } else {
@@ -482,6 +485,7 @@ export async function crawlGoogle(
       skippedUnreachable,
       skippedMissingEmail,
       skippedMissingPhone,
+      qualitySkipReasonCounts,
     },
   });
 
