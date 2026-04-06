@@ -46,3 +46,9 @@ export type LeadScore = {
   total_score: number
   segment: "cold" | "warm" | "hot"
 }
+
+export type JobRunContext = {
+  startedAt: number
+  softDeadlineAt: number
+  stoppedEarly: boolean
+}

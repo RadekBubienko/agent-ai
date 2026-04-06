@@ -1,15 +1,18 @@
 import { db } from "@/lib/db";
-import type { DbClient, TaskConfig } from "@/types/agent";
+import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent";
 import { crawlFacebookComments } from "./sources/facebook_comments";
 import { crawlFacebook } from "./sources/facebook_public";
 import { crawlGoogle } from "./sources/google";
 import { crawlInstagram } from "./sources/instagram";
 import { logTaskEvent } from "./taskLogs";
 
+const SOFT_RUNTIME_BUDGET_MS = 210_000;
+
 type SourceRunner = (
   db: DbClient,
   config: TaskConfig,
   taskId: string,
+  context: JobRunContext,
 ) => Promise<number>;
 
 const sourceRunners: Record<string, SourceRunner> = {
@@ -46,12 +49,19 @@ async function updateTaskStatus(
 export async function startAgentJob(taskId: string, config: TaskConfig) {
   console.log("Agent started:", taskId);
 
+  const context: JobRunContext = {
+    startedAt: Date.now(),
+    softDeadlineAt: Date.now() + SOFT_RUNTIME_BUDGET_MS,
+    stoppedEarly: false,
+  };
+
   try {
     await updateTaskStatus(taskId, "running");
     await logTaskEvent(taskId, "Task uruchomiony", {
       details: {
         sources: config.sources,
         keywords: config.industry?.keywords ?? [],
+        softRuntimeBudgetMs: SOFT_RUNTIME_BUDGET_MS,
       },
     });
 
@@ -68,11 +78,14 @@ export async function startAgentJob(taskId: string, config: TaskConfig) {
         await logTaskEvent(taskId, `Start źródła: ${source}`);
 
         try {
-          const count = await runner(db, config, taskId);
+          const count = await runner(db, config, taskId, context);
 
           await logTaskEvent(taskId, `Koniec źródła: ${source}`, {
-            level: "success",
-            details: { saved: count },
+            level: context.stoppedEarly ? "warn" : "success",
+            details: {
+              saved: count,
+              stoppedEarly: context.stoppedEarly,
+            },
           });
 
           return count;
@@ -92,10 +105,19 @@ export async function startAgentJob(taskId: string, config: TaskConfig) {
     const leadsFound = results.reduce((total, count) => total + count, 0);
 
     await updateTaskStatus(taskId, "finished", leadsFound);
-    await logTaskEvent(taskId, "Task zakończony", {
-      level: "success",
-      details: { leadsFound },
-    });
+    await logTaskEvent(
+      taskId,
+      context.stoppedEarly
+        ? "Task zakończony wcześniej przez limit czasu"
+        : "Task zakończony",
+      {
+        level: context.stoppedEarly ? "warn" : "success",
+        details: {
+          leadsFound,
+          stoppedEarly: context.stoppedEarly,
+        },
+      },
+    );
   } catch (err) {
     console.error("Agent error:", err);
     await updateTaskStatus(taskId, "error");

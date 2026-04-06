@@ -1,12 +1,14 @@
 import * as cheerio from "cheerio"
-import type { DbClient, TaskConfig } from "@/types/agent"
+import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
+import { hasTimeBudgetExpired, markStoppedEarly } from "../runtime"
 import { logTaskEvent } from "../taskLogs"
 
 export async function crawlFacebook(
   db: DbClient,
   config: TaskConfig,
   taskId: string,
+  context: JobRunContext,
 ) {
   console.log("Facebook crawler started")
 
@@ -18,6 +20,15 @@ export async function crawlFacebook(
   })
 
   for (const keyword of keywords) {
+    if (hasTimeBudgetExpired(context, 20_000)) {
+      markStoppedEarly(context)
+      await logTaskEvent(taskId, "Facebook: zatrzymano przez limit czasu", {
+        level: "warn",
+        details: { leadsSaved, keyword },
+      })
+      return leadsSaved
+    }
+
     try {
       await logTaskEvent(taskId, `Facebook: wyszukiwanie "${keyword}"`)
 
@@ -47,6 +58,15 @@ export async function crawlFacebook(
       })
 
       for (const post of posts) {
+        if (hasTimeBudgetExpired(context, 10_000)) {
+          markStoppedEarly(context)
+          await logTaskEvent(taskId, "Facebook: zatrzymano przed kolejnym postem", {
+            level: "warn",
+            details: { leadsSaved, keyword },
+          })
+          return leadsSaved
+        }
+
         const emailMatch =
           post.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
         const websiteMatch = post.match(/https?:\/\/[^\s]+/)

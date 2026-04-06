@@ -1,11 +1,13 @@
-import type { DbClient, TaskConfig } from "@/types/agent"
+import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
+import { hasTimeBudgetExpired, markStoppedEarly } from "../runtime"
 import { logTaskEvent } from "../taskLogs"
 
 export async function crawlInstagram(
   db: DbClient,
   config: TaskConfig,
   taskId: string,
+  context: JobRunContext,
 ) {
   console.log("Instagram crawler started")
 
@@ -20,6 +22,15 @@ export async function crawlInstagram(
   })
 
   for (const hashtag of hashtags) {
+    if (hasTimeBudgetExpired(context, 20_000)) {
+      markStoppedEarly(context)
+      await logTaskEvent(taskId, "Instagram: zatrzymano przez limit czasu", {
+        level: "warn",
+        details: { leadsSaved, hashtag },
+      })
+      return leadsSaved
+    }
+
     console.log("Searching hashtag:", hashtag)
     await logTaskEvent(taskId, `Instagram: hashtag #${hashtag}`)
 
@@ -47,6 +58,15 @@ export async function crawlInstagram(
       })
 
       for (const profile of profiles) {
+        if (hasTimeBudgetExpired(context, 10_000)) {
+          markStoppedEarly(context)
+          await logTaskEvent(taskId, "Instagram: zatrzymano przed kolejnym profilem", {
+            level: "warn",
+            details: { leadsSaved, hashtag },
+          })
+          return leadsSaved
+        }
+
         if (leadsSaved >= limit) {
           console.log("Instagram limit reached:", limit)
           return leadsSaved

@@ -1,12 +1,14 @@
 import * as cheerio from "cheerio"
-import type { DbClient, TaskConfig } from "@/types/agent"
+import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
+import { hasTimeBudgetExpired, markStoppedEarly } from "../runtime"
 import { logTaskEvent } from "../taskLogs"
 
 export async function crawlFacebookComments(
   db: DbClient,
   config: TaskConfig,
   taskId: string,
+  context: JobRunContext,
 ) {
   console.log("Facebook COMMENTS crawler started")
 
@@ -18,6 +20,15 @@ export async function crawlFacebookComments(
   })
 
   for (const keyword of keywords) {
+    if (hasTimeBudgetExpired(context, 20_000)) {
+      markStoppedEarly(context)
+      await logTaskEvent(taskId, "Facebook Comments: zatrzymano przez limit czasu", {
+        level: "warn",
+        details: { leadsSaved, keyword },
+      })
+      return leadsSaved
+    }
+
     try {
       await logTaskEvent(taskId, `Facebook Comments: wyszukiwanie "${keyword}"`)
 
@@ -53,6 +64,19 @@ export async function crawlFacebookComments(
       })
 
       for (const postUrl of postLinks.slice(0, 5)) {
+        if (hasTimeBudgetExpired(context, 15_000)) {
+          markStoppedEarly(context)
+          await logTaskEvent(
+            taskId,
+            "Facebook Comments: zatrzymano przed kolejnym postem",
+            {
+              level: "warn",
+              details: { leadsSaved, keyword },
+            },
+          )
+          return leadsSaved
+        }
+
         try {
           const resPost = await fetch(postUrl, {
             headers: {
@@ -73,6 +97,19 @@ export async function crawlFacebookComments(
           })
 
           for (const comment of comments) {
+            if (hasTimeBudgetExpired(context, 10_000)) {
+              markStoppedEarly(context)
+              await logTaskEvent(
+                taskId,
+                "Facebook Comments: zatrzymano przed kolejnym komentarzem",
+                {
+                  level: "warn",
+                  details: { leadsSaved, keyword, postUrl },
+                },
+              )
+              return leadsSaved
+            }
+
             const emailMatch =
               comment.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
             const websiteMatch = comment.match(/https?:\/\/[^\s]+/)

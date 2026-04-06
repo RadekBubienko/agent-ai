@@ -1,8 +1,9 @@
 import * as cheerio from "cheerio";
 import { fetchWebsite } from "@/lib/ai/fetchWebsite";
 import { findEmails } from "@/lib/ai/findEmails";
-import type { DbClient, TaskConfig } from "@/types/agent";
+import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent";
 import { saveLead } from "../saveLead";
+import { hasTimeBudgetExpired, markStoppedEarly } from "../runtime";
 import { logTaskEvent } from "../taskLogs";
 
 type SearchEndpoint = {
@@ -205,6 +206,7 @@ export async function crawlGoogle(
   db: DbClient,
   config: TaskConfig,
   taskId: string,
+  context: JobRunContext,
 ) {
   console.log("Search crawler started");
   console.log("Task config:", config);
@@ -223,7 +225,23 @@ export async function crawlGoogle(
   });
 
   for (const query of queries) {
-    if (leadsSaved >= limit || pagesInspected >= maxPagesToInspect) {
+    if (
+      leadsSaved >= limit ||
+      pagesInspected >= maxPagesToInspect ||
+      hasTimeBudgetExpired(context, 45_000)
+    ) {
+      if (hasTimeBudgetExpired(context, 45_000)) {
+        markStoppedEarly(context);
+        await logTaskEvent(taskId, "Google: zatrzymano przez limit czasu", {
+          level: "warn",
+          details: {
+            leadsSaved,
+            pagesInspected,
+            remainingQueries: queries.length,
+          },
+        });
+      }
+
       console.log("Stopping search crawler early", {
         leadsSaved,
         limit,
@@ -241,9 +259,10 @@ export async function crawlGoogle(
     );
     const remainingLeads = Math.max(limit - leadsSaved, 1);
     const remainingPages = Math.max(maxPagesToInspect - pagesInspected, 0);
+    const perQueryLinkCap = getMaxLinksPerQuery(config.speed, remainingLeads);
     const maxLinksThisQuery = Math.min(
       links.length,
-      Math.max(remainingLeads * 3, 6),
+      perQueryLinkCap,
       remainingPages,
     );
     const candidateLinks = links.slice(0, maxLinksThisQuery);
@@ -259,6 +278,19 @@ export async function crawlGoogle(
     });
 
     for (const link of candidateLinks) {
+      if (hasTimeBudgetExpired(context, 15_000)) {
+        markStoppedEarly(context);
+        await logTaskEvent(taskId, "Google: zatrzymano przed kolejną stroną", {
+          level: "warn",
+          details: {
+            query,
+            leadsSaved,
+            pagesInspected,
+          },
+        });
+        return leadsSaved;
+      }
+
       if (leadsSaved >= limit) {
         console.log("Lead limit reached:", limit);
         return leadsSaved;
@@ -346,7 +378,7 @@ export async function crawlGoogle(
       }
     }
 
-    await sleep(2000);
+    await sleep(getInterQueryDelayMs(config.speed));
   }
 
   await logTaskEvent(taskId, "Google: crawler zakończony", {
@@ -363,18 +395,21 @@ function buildQueries(config: TaskConfig): string[] {
     .map((keyword) => keyword.trim().replace(/\s+/g, " "))
     .filter(Boolean);
   const location = getSearchLocation(config);
-  const modifiers = getBusinessModifiers(config).slice(0, 2);
-  const intentTerms = getQueryIntentTerms(config).slice(0, 2);
+  const modifiers = getBusinessModifiers(config);
+  const intentTerms = getQueryIntentTerms(config);
+  const queryDepth = getQueryDepthBySpeed(config.speed);
 
   for (const keyword of keywords) {
-    queries.add(joinQueryParts(keyword, location));
+    const variants = [
+      joinQueryParts(keyword, location),
+      joinQueryParts(keyword, intentTerms[0], location),
+      joinQueryParts(keyword, modifiers[0], location),
+      joinQueryParts(keyword, intentTerms[1], location),
+      joinQueryParts(keyword, modifiers[1], location),
+    ].filter(Boolean);
 
-    for (const modifier of modifiers) {
-      queries.add(joinQueryParts(keyword, modifier, location));
-    }
-
-    for (const intent of intentTerms) {
-      queries.add(joinQueryParts(keyword, intent, location));
+    for (const variant of variants.slice(0, queryDepth)) {
+      queries.add(variant);
     }
   }
 
@@ -1014,6 +1049,42 @@ function getQueryIntentTerms(config: TaskConfig): string[] {
   }
 
   return [...terms];
+}
+
+function getQueryDepthBySpeed(speed?: string): number {
+  if (speed === "fast") {
+    return 1;
+  }
+
+  if (speed === "slow") {
+    return 3;
+  }
+
+  return 2;
+}
+
+function getMaxLinksPerQuery(speed: string | undefined, remainingLeads: number) {
+  if (speed === "fast") {
+    return Math.max(Math.min(remainingLeads + 1, 3), 2);
+  }
+
+  if (speed === "slow") {
+    return Math.max(Math.min(remainingLeads + 2, 6), 3);
+  }
+
+  return Math.max(Math.min(remainingLeads + 1, 4), 3);
+}
+
+function getInterQueryDelayMs(speed?: string): number {
+  if (speed === "fast") {
+    return 250;
+  }
+
+  if (speed === "slow") {
+    return 1000;
+  }
+
+  return 500;
 }
 
 function getSearchLocation(config: TaskConfig): string {
