@@ -265,6 +265,9 @@ export async function crawlGoogle(
   const seenDomains = new Set<string>();
   const maxPagesToInspect = Math.max(limit * 5, 20);
   let pagesInspected = 0;
+  let skippedDuplicateDomainInTask = 0;
+  let skippedExistingLead = 0;
+  let skippedRejectedLead = 0;
 
   const queries = buildQueries(config);
 
@@ -356,6 +359,7 @@ export async function crawlGoogle(
 
       if (seenDomains.has(domain)) {
         console.log("Skipping duplicate domain in task:", domain);
+        skippedDuplicateDomainInTask++;
         continue;
       }
 
@@ -424,6 +428,10 @@ export async function crawlGoogle(
             leadsSaved,
           },
         });
+      } else if (result.reason === "duplicate") {
+        skippedExistingLead++;
+      } else if (result.reason === "rejected") {
+        skippedRejectedLead++;
       }
     }
 
@@ -433,6 +441,17 @@ export async function crawlGoogle(
   await logTaskEvent(taskId, "Google: crawler zakończony", {
     level: "success",
     details: { leadsSaved },
+  });
+
+  await logTaskEvent(taskId, "Google: podsumowanie crawlera", {
+    level: "info",
+    details: {
+      leadsSaved,
+      pagesInspected,
+      skippedDuplicateDomainInTask,
+      skippedExistingLead,
+      skippedRejectedLead,
+    },
   });
 
   return leadsSaved;
