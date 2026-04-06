@@ -268,6 +268,10 @@ export async function crawlGoogle(
   let skippedDuplicateDomainInTask = 0;
   let skippedExistingLead = 0;
   let skippedRejectedLead = 0;
+  let skippedQualityOrContent = 0;
+  let skippedUnreachable = 0;
+  let skippedMissingEmail = 0;
+  let skippedMissingPhone = 0;
 
   const queries = buildQueries(config);
 
@@ -312,12 +316,31 @@ export async function crawlGoogle(
     const remainingLeads = Math.max(limit - leadsSaved, 1);
     const remainingPages = Math.max(maxPagesToInspect - pagesInspected, 0);
     const perQueryLinkCap = getMaxLinksPerQuery(config.speed, remainingLeads);
+    const uniqueLinks: string[] = [];
+    const querySeenDomains = new Set<string>();
+
+    for (const link of links) {
+      const domain = extractDomain(link).toLowerCase();
+
+      if (!domain) {
+        continue;
+      }
+
+      if (seenDomains.has(domain) || querySeenDomains.has(domain)) {
+        skippedDuplicateDomainInTask++;
+        continue;
+      }
+
+      querySeenDomains.add(domain);
+      uniqueLinks.push(link);
+    }
+
     const maxLinksThisQuery = Math.min(
-      links.length,
+      uniqueLinks.length,
       perQueryLinkCap,
       remainingPages,
     );
-    const candidateLinks = links.slice(0, maxLinksThisQuery);
+    const candidateLinks = uniqueLinks.slice(0, maxLinksThisQuery);
 
     console.log("Links found:", links.length);
     console.log("Links selected for inspection:", candidateLinks.length);
@@ -389,20 +412,24 @@ export async function crawlGoogle(
 
         if (!qualityDecision.accepted) {
           console.log(qualityDecision.reason, link);
+          skippedQualityOrContent++;
           continue;
         }
       } else {
         console.log("Skipping unreachable page:", link);
+        skippedUnreachable++;
         continue;
       }
 
       if (config.quality_filters.email_required && !email) {
         console.log("Skipping lead without email:", link);
+        skippedMissingEmail++;
         continue;
       }
 
       if (config.quality_filters.phone_required && phones.length === 0) {
         console.log("Skipping lead without phone:", link);
+        skippedMissingPhone++;
         continue;
       }
 
@@ -451,6 +478,10 @@ export async function crawlGoogle(
       skippedDuplicateDomainInTask,
       skippedExistingLead,
       skippedRejectedLead,
+      skippedQualityOrContent,
+      skippedUnreachable,
+      skippedMissingEmail,
+      skippedMissingPhone,
     },
   });
 

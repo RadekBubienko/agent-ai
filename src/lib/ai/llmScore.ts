@@ -1,6 +1,7 @@
 import OpenAI from "openai"
 
 const apiKey = process.env.OPENAI_API_KEY
+const openAiScoringEnabled = process.env.ENABLE_OPENAI_SCORING === "true"
 
 if(!apiKey){
   console.log("OPENAI_API_KEY missing")
@@ -12,6 +13,9 @@ const openai = new OpenAI({
 
 
 export async function llmScore(text:string){
+  if (!openAiScoringEnabled) {
+    return { mlm_probability: 0 }
+  }
 
   const prompt = `
 You are evaluating potential partners for a health and wellness

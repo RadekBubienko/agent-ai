@@ -2,9 +2,16 @@ import { analyzeSocial } from "@/lib/ai/analyzeSocial";
 import { analyzeWebsite } from "@/lib/ai/analyzeWebsite";
 import type { LeadInput, LeadScore } from "@/types/agent";
 
+function isOpenAiScoringEnabled() {
+  return process.env.ENABLE_OPENAI_SCORING === "true";
+}
+
 export async function scoreLead(lead: LeadInput): Promise<LeadScore> {
-  const websiteData = await analyzeWebsite(lead.website ?? "");
   const socialData = await analyzeSocial(lead);
+  const openAiScoringEnabled = isOpenAiScoringEnabled();
+  const websiteData = openAiScoringEnabled
+    ? await analyzeWebsite(lead.website ?? "")
+    : null;
 
   let fit_score = 0;
   let intent_score = 0;
