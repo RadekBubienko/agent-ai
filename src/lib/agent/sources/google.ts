@@ -951,11 +951,25 @@ function getBroadKeywordLeadTerms(
     normalizedKeyword.includes("estety");
 
   if (healthLikeKeyword) {
-    terms.push("terapia", "gabinet", "poradnia", "klinika", "centrum zdrowia");
+    terms.push(
+      "gabinet",
+      "terapia",
+      "cennik",
+      "umow wizyte",
+      "prywatnie",
+      "klinika",
+    );
   }
 
   if (beautyLikeKeyword) {
-    terms.push("gabinet", "salon", "kosmetologia", "medycyna estetyczna");
+    terms.push(
+      "gabinet",
+      "salon",
+      "cennik",
+      "umow wizyte",
+      "kosmetologia",
+      "medycyna estetyczna",
+    );
   }
 
   if (
@@ -972,10 +986,10 @@ function getBroadKeywordLeadTerms(
     terms.push("sklep", "produkty");
   }
 
-  terms.push("kontakt");
+  terms.push("kontakt", "oferta");
 
   if (healthLikeKeyword) {
-    terms.push("rehabilitacja");
+    terms.push("rehabilitacja", "zabieg");
   }
 
   if (beautyLikeKeyword) {
