@@ -446,16 +446,18 @@ function buildQueries(config: TaskConfig): string[] {
   const location = getSearchLocation(config);
   const modifiers = getBusinessModifiers(config);
   const intentTerms = getQueryIntentTerms(config);
+  const strongIntentTerms = getStrongLeadIntentTerms(config);
   const queryDepth = getQueryDepthBySpeed(config.speed);
 
   for (const keyword of keywords) {
     const variants = [
       joinQueryParts(keyword, location),
-      joinQueryParts(keyword, intentTerms[0], location),
-      joinQueryParts(keyword, modifiers[0], location),
-      joinQueryParts(keyword, intentTerms[1], location),
-      joinQueryParts(keyword, modifiers[1], location),
-    ].filter(Boolean);
+      ...strongIntentTerms.map((term) => joinQueryParts(keyword, term, location)),
+      ...intentTerms.map((term) => joinQueryParts(keyword, term, location)),
+      ...modifiers.map((term) => joinQueryParts(keyword, term, location)),
+    ]
+      .filter(Boolean)
+      .filter((variant, index, all) => all.indexOf(variant) === index);
 
     for (const variant of variants.slice(0, queryDepth)) {
       queries.add(variant);
@@ -1220,16 +1222,64 @@ function getQueryIntentTerms(config: TaskConfig): string[] {
   return [...terms];
 }
 
+function getStrongLeadIntentTerms(config: TaskConfig): string[] {
+  const entityTypes = new Set(config.entity_type ?? []);
+  const terms: string[] = [];
+
+  if (
+    config.quality_filters.email_required ||
+    config.quality_filters.phone_required ||
+    config.quality_filters.website_required
+  ) {
+    terms.push("kontakt");
+  }
+
+  if (entityTypes.has("company")) {
+    terms.push("kontakt");
+    terms.push("klinika");
+  }
+
+  if (entityTypes.has("shop")) {
+    terms.push("sklep");
+    terms.push("produkt");
+  }
+
+  if (entityTypes.has("person") || entityTypes.has("influencer")) {
+    terms.push("gabinet");
+    terms.push("studio");
+  }
+
+  if (entityTypes.has("mlm_prospect")) {
+    terms.push("wellness");
+  }
+
+  if (
+    entityTypes.has("company") ||
+    entityTypes.has("person") ||
+    entityTypes.has("influencer")
+  ) {
+    terms.push("salon");
+    terms.push("oferta");
+  }
+
+  if (terms.length === 0) {
+    terms.push("kontakt");
+    terms.push("gabinet");
+  }
+
+  return [...new Set(terms)];
+}
+
 function getQueryDepthBySpeed(speed?: string): number {
   if (speed === "fast") {
     return 2;
   }
 
   if (speed === "slow") {
-    return 4;
+    return 5;
   }
 
-  return 3;
+  return 4;
 }
 
 function getMaxLinksPerQuery(speed: string | undefined, remainingLeads: number) {
@@ -1269,11 +1319,41 @@ function getSearchLocation(config: TaskConfig): string {
     return region;
   }
 
-  if (country && country.length > 2) {
-    return country;
+  if (country) {
+    return normalizeCountryForSearch(country);
   }
 
   return "";
+}
+
+function normalizeCountryForSearch(country: string): string {
+  const normalized = country.trim().toUpperCase();
+
+  if (normalized === "PL") {
+    return "Polska";
+  }
+
+  if (normalized === "DE") {
+    return "Niemcy";
+  }
+
+  if (normalized === "CZ") {
+    return "Czechy";
+  }
+
+  if (normalized === "SK") {
+    return "Słowacja";
+  }
+
+  if (normalized === "LT") {
+    return "Litwa";
+  }
+
+  if (normalized === "UA") {
+    return "Ukraina";
+  }
+
+  return country.length > 2 ? country : "";
 }
 
 function joinQueryParts(...parts: Array<string | undefined | null>): string {
