@@ -13,7 +13,6 @@ type AgentPageHeaderProps = {
 };
 
 const navigationLinks = [
-  { href: "/", label: "Strona główna" },
   { href: "/agent", label: "Dashboard" },
   { href: "/agent/leads", label: "Leady" },
   { href: "/agent/rejected-leads", label: "Odrzucone" },
@@ -33,10 +32,6 @@ export default function AgentPageHeader({
   const pathname = usePathname();
 
   function isActiveLink(href: string) {
-    if (href === "/") {
-      return pathname === href;
-    }
-
     if (href === "/agent") {
       return pathname === "/agent" || pathname.startsWith("/agent/tasks/");
     }
