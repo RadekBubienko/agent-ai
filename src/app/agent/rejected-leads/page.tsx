@@ -422,13 +422,13 @@ export default function RejectedLeadsPage() {
             <thead className="bg-gray-50 text-left">
               <tr className="text-sm text-gray-500">
                 <th className="w-[15%] px-4 py-4 font-medium">Nazwa</th>
-                <th className="w-[24%] px-4 py-4 font-medium">Kontakt</th>
-                <th className="w-[12%] px-4 py-4 font-medium">Domena</th>
-                <th className="w-[11%] px-4 py-4 font-medium">Zrodlo</th>
+                <th className="w-[23%] px-4 py-4 font-medium">Kontakt</th>
+                <th className="w-[11%] px-4 py-4 font-medium">Domena</th>
+                <th className="w-[10%] px-4 py-4 font-medium">Zrodlo</th>
                 <th className="w-[10%] px-4 py-4 font-medium">Powod</th>
                 <th className="w-[11%] px-4 py-4 font-medium">Odrzucono</th>
-                <th className="w-[11%] px-4 py-4 font-medium">Pierwotnie</th>
-                <th className="w-[6%] px-4 py-4 font-medium text-center">Akcje</th>
+                <th className="w-[12%] px-4 py-4 font-medium">Pierwotnie</th>
+                <th className="w-[8%] px-2 py-4 font-medium text-center">Akcje</th>
               </tr>
             </thead>
 
@@ -494,12 +494,12 @@ export default function RejectedLeadsPage() {
                       {formatPolishDateTime(lead.original_created_at)}
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-center">
+                  <td className="px-2 py-4 text-center">
                     <button
                       type="button"
                       onClick={() => void restoreLead(lead)}
                       disabled={restoringLeadId === lead.id}
-                      className="ui-pressable inline-flex whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="ui-pressable inline-flex whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {restoringLeadId === lead.id ? "Przywracanie..." : "Przywroc"}
                     </button>
