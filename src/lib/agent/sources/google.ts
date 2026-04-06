@@ -59,6 +59,8 @@ const BLOCKED_HOST_PATTERNS = [
   "hellozdrowie.pl",
   "zdrowie.pl",
   "onet.pl",
+  "forbes.pl",
+  "forbes.com",
   "allegro.pl",
   "gemini.pl",
   "cambridge.org",
@@ -178,6 +180,53 @@ const PUBLIC_INSTITUTION_SIGNALS = [
   "gmina",
   "powiat",
   "fundusze europejskie",
+];
+
+const TARGET_BUSINESS_SIGNALS = [
+  "gabinet",
+  "klinika",
+  "salon",
+  "studio",
+  "poradnia",
+  "przychodnia",
+  "centrum medyczne",
+  "centrum zdrowia",
+  "placowka medyczna",
+  "medycyna estetyczna",
+  "kosmetolog",
+  "kosmetologia",
+  "rehabilitacja",
+  "fizjoterapia",
+  "terapia",
+  "zabieg",
+  "stomatolog",
+  "dentysta",
+  "dietetyk",
+  "dietetyka",
+  "spa",
+  "wellness",
+];
+
+const OUT_OF_SCOPE_BUSINESS_SIGNALS = [
+  "ubezpieczenie",
+  "ubezpieczenia",
+  "ubezpieczyciel",
+  "towarzystwo ubezpieczen",
+  "towarzystwo ubezpieczeniowe",
+  "polisa",
+  "certyfikacja",
+  "certyfikat",
+  "certyfikaty",
+  "akredytacja",
+  "audyt",
+  "auditor",
+  "iso 9001",
+  "iso 14001",
+  "iso 45001",
+  "szkolenie",
+  "szkolenia",
+  "kurs",
+  "kursy",
 ];
 
 export type SearchAttemptDebug = {
@@ -856,6 +905,66 @@ function isBlockedPageContent(html: string): boolean {
   return blockedFragments.some((fragment) => text.includes(fragment));
 }
 
+function hasBusinessIntentPath(url: string): boolean {
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    const businessPathSignals = [
+      "/kontakt",
+      "/contact",
+      "/o-nas",
+      "/about",
+      "/oferta",
+      "/uslugi",
+      "/services",
+      "/cennik",
+      "/rezerwacja",
+      "/booking",
+      "/produkty",
+      "/produkt",
+      "/sklep",
+      "/shop",
+    ];
+
+    return businessPathSignals.some((signal) => path.includes(signal));
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyArticleUrl(url: string): boolean {
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+
+    if (hasBusinessIntentPath(url)) {
+      return false;
+    }
+
+    const articleSignals = [
+      "co-to",
+      "czy-",
+      "jak-",
+      "dlaczego",
+      "poradnik",
+      "artyk",
+      "blog",
+      "news",
+      "aktualnosci",
+      "wiadomosci",
+      "ranking",
+      "przewodnik",
+      "na-czym-polega",
+      "warto",
+      "ile-kosztuje",
+      "objawy",
+      "przyczyny",
+    ];
+
+    return articleSignals.some((signal) => path.includes(signal));
+  } catch {
+    return false;
+  }
+}
+
 function isEditorialPageContent(html: string): boolean {
   const text = normalizePageText(html);
   const editorialSignals = [
@@ -980,15 +1089,37 @@ function evaluatePageQuality(
     normalizedText,
     PUBLIC_INSTITUTION_SIGNALS,
   );
+  const targetBusinessScore = countSignalMatches(
+    normalizedText,
+    TARGET_BUSINESS_SIGNALS,
+  );
+  const outOfScopeBusinessScore = countSignalMatches(
+    normalizedText,
+    OUT_OF_SCOPE_BUSINESS_SIGNALS,
+  );
   const editorialPage = isEditorialPageContent(html);
   const likelyBusinessPage = isLikelyBusinessPage(html);
   const sameDomainEmail = hasSameDomainEmail(email, url);
   const hasPhone = phones.length > 0;
+  const businessIntentPath = hasBusinessIntentPath(url);
+  const articleUrl = isLikelyArticleUrl(url);
 
   if (isBlockedPageContent(html) || publicInstitutionScore > 0) {
     return {
       accepted: false,
       reason: "Skipping blocked or public institution page:",
+    };
+  }
+
+  if (
+    articleUrl &&
+    !businessIntentPath &&
+    strongBusinessScore === 0 &&
+    targetBusinessScore === 0
+  ) {
+    return {
+      accepted: false,
+      reason: "Skipping article-like page:",
     };
   }
 
@@ -1009,6 +1140,29 @@ function evaluatePageQuality(
     return {
       accepted: false,
       reason: "Skipping content-heavy page:",
+    };
+  }
+
+  if (
+    outOfScopeBusinessScore >= 2 &&
+    !businessIntentPath &&
+    targetBusinessScore === 0
+  ) {
+    return {
+      accepted: false,
+      reason: "Skipping out-of-scope business:",
+    };
+  }
+
+  if (
+    outOfScopeBusinessScore >= 1 &&
+    targetBusinessScore === 0 &&
+    strongBusinessScore === 0 &&
+    !sameDomainEmail
+  ) {
+    return {
+      accepted: false,
+      reason: "Skipping weak-fit business:",
     };
   }
 
