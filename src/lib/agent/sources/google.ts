@@ -83,6 +83,8 @@ const BLOCKED_HOST_PATTERNS = [
   "urodaizdrowie.pl",
 ];
 
+const BLOCKED_HOST_FRAGMENTS = ["bip", "nfz", "pacjent", "cez"];
+
 const BLOCKED_PATH_PATTERNS = [
   "/wiki/",
   "/videos/",
@@ -506,6 +508,7 @@ function buildQueries(config: TaskConfig): string[] {
   for (const keyword of keywords) {
     const broadKeywordLeadTerms = getBroadKeywordLeadTerms(keyword, config);
     const broadKeyword = broadKeywordLeadTerms.length > 0;
+    const searchExclusionTerms = getSearchExclusionTerms(keyword);
     const variants = [
       ...broadKeywordLeadTerms.map((term) =>
         joinQueryParts(keyword, term, location),
@@ -524,12 +527,15 @@ function buildQueries(config: TaskConfig): string[] {
           joinQueryParts(keyword, location),
           ...variants.filter((variant) => variant !== joinQueryParts(keyword, location)),
         ];
+    const finalizedVariants = prioritizedVariants.map((variant) =>
+      appendSearchExclusions(variant, searchExclusionTerms),
+    );
 
     const effectiveQueryDepth = broadKeyword
       ? Math.min(queryDepth + 1, 6)
       : queryDepth;
 
-    for (const variant of prioritizedVariants.slice(0, effectiveQueryDepth)) {
+    for (const variant of finalizedVariants.slice(0, effectiveQueryDepth)) {
       queries.add(variant);
     }
   }
@@ -1026,6 +1032,43 @@ function isBroadLeadKeyword(normalizedKeyword: string): boolean {
   );
 }
 
+function getSearchExclusionTerms(keyword: string): string[] {
+  const normalizedKeyword = normalizeSignalText(keyword);
+
+  if (!isBroadLeadKeyword(normalizedKeyword)) {
+    return [];
+  }
+
+  const terms = [
+    "gov.pl",
+    "nfz",
+    "bip",
+    "pacjent",
+    "ministerstwo",
+    "urzad",
+    "samorzad",
+    "wikipedia",
+    "medonet",
+    "abczdrowie",
+    "poradnikzdrowie",
+    "rynekzdrowia",
+    "pap",
+    "forbes",
+  ];
+
+  if (
+    normalizedKeyword.includes("zdrow") ||
+    normalizedKeyword.includes("samolecz") ||
+    normalizedKeyword.includes("wellness") ||
+    normalizedKeyword.includes("terap") ||
+    normalizedKeyword.includes("rehabil")
+  ) {
+    terms.push("publiczny", "fundusz");
+  }
+
+  return [...new Set(terms)];
+}
+
 function isAllowedSearchResult(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -1038,6 +1081,11 @@ function isAllowedSearchResult(url: string): boolean {
       )
     ) {
       console.log("Skipping blocked host:", host);
+      return false;
+    }
+
+    if (BLOCKED_HOST_FRAGMENTS.some((fragment) => host.includes(fragment))) {
+      console.log("Skipping blocked host fragment:", host);
       return false;
     }
 
@@ -1532,6 +1580,14 @@ function joinQueryParts(...parts: Array<string | undefined | null>): string {
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function appendSearchExclusions(query: string, exclusionTerms: string[]): string {
+  if (exclusionTerms.length === 0) {
+    return query;
+  }
+
+  return joinQueryParts(query, ...exclusionTerms.map((term) => `-${term}`));
 }
 
 function normalizeSignalText(text: string): string {
