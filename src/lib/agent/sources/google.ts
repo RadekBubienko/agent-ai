@@ -781,24 +781,29 @@ function extractDomain(url: string): string {
 
 function getBusinessModifiers(config: TaskConfig): string[] {
   const entityTypes = new Set(config.entity_type ?? []);
+  const modifiers: string[] = [];
 
-  if (entityTypes.has("mlm_prospect")) {
-    return ["wellness", "kontakt", "firma"];
+  if (entityTypes.has("company")) {
+    modifiers.push("firma", "uslugi");
   }
 
   if (entityTypes.has("shop")) {
-    return ["sklep", "hurtownia", "produkty"];
+    modifiers.push("sklep", "produkty");
   }
 
   if (entityTypes.has("person") || entityTypes.has("influencer")) {
-    return ["studio", "gabinet", "kontakt"];
+    modifiers.push("studio", "gabinet");
   }
 
-  if (entityTypes.has("company")) {
-    return ["firma", "uslugi", "kontakt"];
+  if (entityTypes.has("mlm_prospect")) {
+    modifiers.push("wellness", "mlm");
   }
 
-  return ["gabinet", "klinika", "salon"];
+  if (modifiers.length === 0) {
+    modifiers.push("gabinet", "klinika", "salon");
+  }
+
+  return [...new Set(modifiers)];
 }
 
 function isAllowedSearchResult(url: string): boolean {
@@ -1038,13 +1043,23 @@ function getQueryIntentTerms(config: TaskConfig): string[] {
     terms.add("kontakt");
   }
 
+  if (entityTypes.has("company")) {
+    terms.add("uslugi");
+  }
+
   if (entityTypes.has("shop")) {
     terms.add("sklep");
-  } else if (entityTypes.has("person") || entityTypes.has("influencer")) {
+  }
+
+  if (entityTypes.has("person") || entityTypes.has("influencer")) {
     terms.add("studio");
-  } else if (entityTypes.has("mlm_prospect")) {
+  }
+
+  if (entityTypes.has("mlm_prospect")) {
     terms.add("wellness");
-  } else {
+  }
+
+  if (terms.size === 0) {
     terms.add("uslugi");
   }
 
@@ -1053,14 +1068,14 @@ function getQueryIntentTerms(config: TaskConfig): string[] {
 
 function getQueryDepthBySpeed(speed?: string): number {
   if (speed === "fast") {
-    return 1;
+    return 2;
   }
 
   if (speed === "slow") {
-    return 3;
+    return 4;
   }
 
-  return 2;
+  return 3;
 }
 
 function getMaxLinksPerQuery(speed: string | undefined, remainingLeads: number) {
@@ -1069,10 +1084,10 @@ function getMaxLinksPerQuery(speed: string | undefined, remainingLeads: number) 
   }
 
   if (speed === "slow") {
-    return Math.max(Math.min(remainingLeads + 2, 6), 3);
+    return Math.max(Math.min(remainingLeads + 3, 6), 4);
   }
 
-  return Math.max(Math.min(remainingLeads + 1, 4), 3);
+  return Math.max(Math.min(remainingLeads + 2, 5), 3);
 }
 
 function getInterQueryDelayMs(speed?: string): number {

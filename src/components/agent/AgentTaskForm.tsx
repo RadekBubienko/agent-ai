@@ -22,7 +22,7 @@ type TaskConfig = {
     website_required: boolean;
   };
   limit: number;
-  speed: string;
+  speed: "fast" | "medium" | "slow";
 };
 
 export default function AgentTaskForm() {
@@ -50,7 +50,7 @@ export default function AgentTaskForm() {
       website_required: true,
     },
     limit: 200,
-    speed: "medium",
+    speed: "slow",
   });
 
   function toggleArray(field: "entity_type" | "sources", value: string) {
@@ -184,6 +184,24 @@ export default function AgentTaskForm() {
               })
             }
           />
+
+          <label className="block space-y-2">
+            <span className="font-medium">Tempo pracy</span>
+            <select
+              className="w-full border p-2 rounded"
+              value={form.speed}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  speed: e.target.value as TaskConfig["speed"],
+                })
+              }
+            >
+              <option value="fast">Szybko - mniej sprawdza</option>
+              <option value="medium">Średnio - balans</option>
+              <option value="slow">Dokładniej - więcej leadów</option>
+            </select>
+          </label>
 
         </div>
       )}
