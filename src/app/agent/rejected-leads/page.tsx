@@ -417,30 +417,30 @@ export default function RejectedLeadsPage() {
       </div>
 
       <div className="hidden lg:block">
-        <div className="border border-gray-200 bg-white shadow-sm rounded-none">
+        <div className="overflow-hidden border border-gray-200 bg-white shadow-sm rounded-none">
           <table className="w-full table-fixed">
             <thead className="bg-gray-50 text-left">
               <tr className="text-sm text-gray-500">
-                <th className="w-[16%] px-5 py-4 font-medium">Nazwa</th>
-                <th className="w-[26%] px-5 py-4 font-medium">Kontakt</th>
-                <th className="w-[13%] px-5 py-4 font-medium">Domena</th>
-                <th className="w-[14%] px-5 py-4 font-medium">Zrodlo</th>
-                <th className="w-[12%] px-5 py-4 font-medium">Powod</th>
-                <th className="w-[10%] px-5 py-4 font-medium">Odrzucono</th>
-                <th className="w-[8%] px-5 py-4 font-medium">Pierwotnie</th>
-                <th className="w-[8%] px-5 py-4 font-medium">Akcje</th>
+                <th className="w-[15%] px-4 py-4 font-medium">Nazwa</th>
+                <th className="w-[24%] px-4 py-4 font-medium">Kontakt</th>
+                <th className="w-[12%] px-4 py-4 font-medium">Domena</th>
+                <th className="w-[11%] px-4 py-4 font-medium">Zrodlo</th>
+                <th className="w-[10%] px-4 py-4 font-medium">Powod</th>
+                <th className="w-[11%] px-4 py-4 font-medium">Odrzucono</th>
+                <th className="w-[11%] px-4 py-4 font-medium">Pierwotnie</th>
+                <th className="w-[6%] px-4 py-4 font-medium text-center">Akcje</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-gray-100">
               {leads.map((lead) => (
                 <tr key={lead.id} className="align-top">
-                  <td className="px-5 py-4 text-sm font-medium text-gray-900">
+                  <td className="px-4 py-4 text-sm font-medium text-gray-900">
                     <div className="break-words">
                       {lead.name ?? lead.domain ?? "-"}
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
+                  <td className="px-4 py-4 text-sm text-gray-700">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="break-all">{lead.email ?? "-"}</div>
@@ -470,10 +470,10 @@ export default function RejectedLeadsPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
+                  <td className="px-4 py-4 text-sm text-gray-700">
                     <div className="break-all">{lead.domain ?? "-"}</div>
                   </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
+                  <td className="px-4 py-4 text-sm text-gray-700">
                     <div className="space-y-1 break-words">
                       <div className="font-medium text-gray-900">
                         {lead.platform ?? "-"}
@@ -481,21 +481,25 @@ export default function RejectedLeadsPage() {
                       <div className="text-gray-500">{lead.source ?? "-"}</div>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
+                  <td className="px-4 py-4 text-sm text-gray-700">
                     {formatReason(lead.reason)}
                   </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
-                    {formatPolishDateTime(lead.rejected_at)}
+                  <td className="px-4 py-4 text-xs leading-5 text-gray-700">
+                    <div className="break-words">
+                      {formatPolishDateTime(lead.rejected_at)}
+                    </div>
                   </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
-                    {formatPolishDateTime(lead.original_created_at)}
+                  <td className="px-4 py-4 text-xs leading-5 text-gray-700">
+                    <div className="break-words">
+                      {formatPolishDateTime(lead.original_created_at)}
+                    </div>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-4 text-center">
                     <button
                       type="button"
                       onClick={() => void restoreLead(lead)}
                       disabled={restoringLeadId === lead.id}
-                      className="ui-pressable inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="ui-pressable inline-flex whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {restoringLeadId === lead.id ? "Przywracanie..." : "Przywroc"}
                     </button>
@@ -507,7 +511,7 @@ export default function RejectedLeadsPage() {
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-5 py-10 text-center text-sm text-gray-500"
+                    className="px-4 py-10 text-center text-sm text-gray-500"
                   >
                     Brak odrzuconych leadow.
                   </td>
