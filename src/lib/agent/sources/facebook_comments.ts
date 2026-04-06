@@ -3,6 +3,11 @@ import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
 import { hasTimeBudgetExpired, markStoppedEarly } from "../runtime"
 import { logTaskEvent } from "../taskLogs"
+import {
+  fetchFacebookDocument,
+  getFacebookInterRequestDelayMs,
+  sleep,
+} from "./facebookCommon"
 
 export async function crawlFacebookComments(
   db: DbClient,
@@ -13,13 +18,23 @@ export async function crawlFacebookComments(
   console.log("Facebook COMMENTS crawler started")
 
   const keywords = config.industry?.keywords || []
+  const limit = config.limit || 50
   let leadsSaved = 0
 
   await logTaskEvent(taskId, "Facebook Comments: start crawlera", {
-    details: { keywords },
+    details: {
+      keywords,
+      limit,
+      speed: config.speed,
+      qualityFilters: config.quality_filters,
+    },
   })
 
   for (const keyword of keywords) {
+    if (leadsSaved >= limit) {
+      return leadsSaved
+    }
+
     if (hasTimeBudgetExpired(context, 20_000)) {
       markStoppedEarly(context)
       await logTaskEvent(taskId, "Facebook Comments: zatrzymano przez limit czasu", {
@@ -36,13 +51,26 @@ export async function crawlFacebookComments(
         "https://mbasic.facebook.com/search/posts/?q=" +
         encodeURIComponent(keyword)
 
-      const res = await fetch(searchUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        },
-      })
+      const res = await fetchFacebookDocument(searchUrl)
 
-      const html = await res.text()
+      if (!res.ok || !res.html) {
+        await logTaskEvent(
+          taskId,
+          "Facebook Comments: search niedostepny lub zablokowany",
+          {
+            level: "warn",
+            details: {
+              keyword,
+              blockedReason: res.blockedReason,
+              status: res.status,
+              finalUrl: res.finalUrl,
+            },
+          },
+        )
+        continue
+      }
+
+      const html = res.html
       const $ = cheerio.load(html)
       const postLinks: string[] = []
 
@@ -64,6 +92,10 @@ export async function crawlFacebookComments(
       })
 
       for (const postUrl of postLinks.slice(0, 5)) {
+        if (leadsSaved >= limit) {
+          return leadsSaved
+        }
+
         if (hasTimeBudgetExpired(context, 15_000)) {
           markStoppedEarly(context)
           await logTaskEvent(
@@ -78,13 +110,23 @@ export async function crawlFacebookComments(
         }
 
         try {
-          const resPost = await fetch(postUrl, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            },
-          })
+          const resPost = await fetchFacebookDocument(postUrl)
 
-          const postHtml = await resPost.text()
+          if (!resPost.ok || !resPost.html) {
+            await logTaskEvent(taskId, "Facebook Comments: post zablokowany", {
+              level: "warn",
+              details: {
+                keyword,
+                postUrl,
+                blockedReason: resPost.blockedReason,
+                status: resPost.status,
+                finalUrl: resPost.finalUrl,
+              },
+            })
+            continue
+          }
+
+          const postHtml = resPost.html
           const $$ = cheerio.load(postHtml)
           const comments: string[] = []
 
@@ -116,6 +158,10 @@ export async function crawlFacebookComments(
 
             if (!emailMatch && !websiteMatch) continue
 
+            if (config.quality_filters.email_required && !emailMatch) continue
+
+            if (config.quality_filters.website_required && !websiteMatch) continue
+
             const lead = {
               name: keyword + " comment lead",
               email: emailMatch?.[0] || null,
@@ -140,12 +186,16 @@ export async function crawlFacebookComments(
                 },
               )
             }
+
+            if (leadsSaved >= limit) {
+              return leadsSaved
+            }
           }
 
-          await new Promise((resolve) => setTimeout(resolve, 2000))
+          await sleep(getFacebookInterRequestDelayMs(config.speed))
         } catch (err) {
           console.error("post crawl error:", err)
-          await logTaskEvent(taskId, "Facebook Comments: błąd postu", {
+          await logTaskEvent(taskId, "Facebook Comments: blad postu", {
             level: "error",
             details: {
               keyword,
@@ -156,10 +206,10 @@ export async function crawlFacebookComments(
         }
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+      await sleep(getFacebookInterRequestDelayMs(config.speed))
     } catch (err) {
       console.error("facebook comments crawler error:", err)
-      await logTaskEvent(taskId, `Facebook Comments: błąd dla "${keyword}"`, {
+      await logTaskEvent(taskId, `Facebook Comments: blad dla "${keyword}"`, {
         level: "error",
         details: {
           message: err instanceof Error ? err.message : String(err),
