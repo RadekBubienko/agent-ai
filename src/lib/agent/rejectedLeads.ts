@@ -24,6 +24,27 @@ type RejectedLeadListRow = RowDataPacket & {
   original_created_at: string | null;
 };
 
+type RejectedLeadRestoreRow = RejectedLeadListRow & {
+  lead_id: number | null;
+  normalized_name: string | null;
+  task_id: string | null;
+  lead_type: string | null;
+  segment: string | null;
+  status: string | null;
+  total_score: number | null;
+  fit_score: number | null;
+  intent_score: number | null;
+  engagement_score: number | null;
+};
+
+type CountRow = RowDataPacket & {
+  count: number;
+};
+
+type ExistingLeadRow = RowDataPacket & {
+  id: number;
+};
+
 type LeadRow = RowDataPacket & {
   id: number;
   name: string | null;
@@ -258,13 +279,259 @@ export async function rejectLeadById(
   }
 }
 
-export async function getRejectedLeads(limit = 500) {
+type RestoreRejectedLeadResult =
+  | {
+      success: true;
+      leadId: number;
+      reusedExisting: boolean;
+    }
+  | {
+      success: false;
+      reason: "not_found";
+    };
+
+async function findExistingLeadId(
+  client: DbClient,
+  lead: {
+    email?: string | null;
+    domain?: string | null;
+    name?: string | null;
+  },
+): Promise<number | null> {
+  const email = normalizeEmail(lead.email);
+
+  if (email) {
+    const [rows] = await client.query<ExistingLeadRow[]>(
+      "SELECT id FROM leads WHERE email = ? LIMIT 1",
+      [email],
+    );
+
+    if (rows.length) {
+      return rows[0].id;
+    }
+  }
+
+  const domain = lead.domain?.trim().toLowerCase() || null;
+
+  if (domain) {
+    const [rows] = await client.query<ExistingLeadRow[]>(
+      "SELECT id FROM leads WHERE domain = ? LIMIT 1",
+      [domain],
+    );
+
+    if (rows.length) {
+      return rows[0].id;
+    }
+  }
+
+  const normalizedName = normalizeLeadName(lead.name);
+
+  if (normalizedName) {
+    const [rows] = await client.query<ExistingLeadRow[]>(
+      `
+      SELECT id
+      FROM leads
+      WHERE name = ?
+      LIMIT 1
+      `,
+      [lead.name],
+    );
+
+    if (rows.length) {
+      return rows[0].id;
+    }
+  }
+
+  return null;
+}
+
+export async function restoreRejectedLeadById(
+  rejectedLeadId: number,
+): Promise<RestoreRejectedLeadResult> {
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    await ensureRejectedLeadsTable(connection);
+
+    const [rows] = await connection.query<RejectedLeadRestoreRow[]>(
+      `
+      SELECT
+        id,
+        lead_id,
+        name,
+        normalized_name,
+        email,
+        website,
+        domain,
+        source,
+        platform,
+        task_id,
+        lead_type,
+        segment,
+        status,
+        total_score,
+        fit_score,
+        intent_score,
+        engagement_score,
+        reason,
+        rejected_at,
+        original_created_at
+      FROM rejected_leads
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [rejectedLeadId],
+    );
+
+    const rejectedLead = rows[0];
+
+    if (!rejectedLead) {
+      await connection.rollback();
+      return {
+        success: false,
+        reason: "not_found",
+      };
+    }
+
+    const existingLeadId = await findExistingLeadId(connection, {
+      email: rejectedLead.email,
+      domain: rejectedLead.domain,
+      name: rejectedLead.name,
+    });
+
+    if (existingLeadId) {
+      await connection.query("DELETE FROM rejected_leads WHERE id = ?", [
+        rejectedLead.id,
+      ]);
+      await connection.commit();
+
+      return {
+        success: true,
+        leadId: existingLeadId,
+        reusedExisting: true,
+      };
+    }
+
+    const [result] = await connection.query<ResultSetHeader>(
+      `
+      INSERT INTO leads (
+        name,
+        email,
+        website,
+        domain,
+        source,
+        platform,
+        task_id,
+        lead_type,
+        fit_score,
+        intent_score,
+        engagement_score,
+        total_score,
+        segment,
+        status,
+        created_at
+      )
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `,
+      [
+        rejectedLead.name,
+        rejectedLead.email,
+        rejectedLead.website,
+        rejectedLead.domain,
+        rejectedLead.source ?? "agent",
+        rejectedLead.platform,
+        rejectedLead.task_id,
+        rejectedLead.lead_type ?? "agent",
+        rejectedLead.fit_score ?? 0,
+        rejectedLead.intent_score ?? 0,
+        rejectedLead.engagement_score ?? 0,
+        rejectedLead.total_score ?? 0,
+        rejectedLead.segment ?? "cold",
+        rejectedLead.status ?? "new",
+        rejectedLead.original_created_at
+          ? new Date(rejectedLead.original_created_at)
+          : new Date(),
+      ],
+    );
+
+    if (rejectedLead.task_id) {
+      await connection.query(
+        `
+        UPDATE agent_tasks
+        SET leads_found = COALESCE(leads_found, 0) + 1
+        WHERE id = ?
+        `,
+        [rejectedLead.task_id],
+      );
+    }
+
+    await connection.query("DELETE FROM rejected_leads WHERE id = ?", [
+      rejectedLead.id,
+    ]);
+
+    await connection.commit();
+
+    return {
+      success: true,
+      leadId: result.insertId,
+      reusedExisting: false,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export type RejectedLeadPageSize = number | "all";
+export type RejectedLeadSort = "newest" | "oldest";
+
+export type RejectedLeadListFilters = {
+  page?: number;
+  pageSize?: RejectedLeadPageSize;
+  sort?: RejectedLeadSort;
+};
+
+export type RejectedLeadPage = {
+  leads: RejectedLeadListRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+  pageSize: RejectedLeadPageSize;
+  sort: RejectedLeadSort;
+};
+
+export async function getRejectedLeads(
+  filters: RejectedLeadListFilters = {},
+): Promise<RejectedLeadPage> {
   await ensureRejectedLeadsTable();
 
-  const safeLimit = Math.max(1, Math.min(limit, 1000));
+  const pageSize =
+    filters.pageSize === "all"
+      ? "all"
+      : [10, 25, 50, 100].includes(Number(filters.pageSize))
+        ? Number(filters.pageSize)
+        : 25;
+  const sort = filters.sort === "oldest" ? "oldest" : "newest";
+  const orderDirection = sort === "oldest" ? "ASC" : "DESC";
+  const requestedPage = Math.max(1, filters.page ?? 1);
 
-  const [rows] = await db.query<RejectedLeadListRow[]>(
+  const [countRows] = await db.query<CountRow[]>(
     `
+    SELECT COUNT(*) AS count
+    FROM rejected_leads
+    `,
+  );
+
+  const total = Number(countRows[0]?.count ?? 0);
+  const totalPages =
+    pageSize === "all" ? 1 : Math.max(1, Math.ceil(total / pageSize));
+  const page = pageSize === "all" ? 1 : Math.min(requestedPage, totalPages);
+  const params: Array<string | number> = [];
+
+  let query = `
     SELECT
       id,
       name,
@@ -277,11 +544,22 @@ export async function getRejectedLeads(limit = 500) {
       rejected_at,
       original_created_at
     FROM rejected_leads
-    ORDER BY rejected_at DESC, id DESC
-    LIMIT ?
-    `,
-    [safeLimit],
-  );
+    ORDER BY rejected_at ${orderDirection}, id ${orderDirection}
+  `;
 
-  return rows;
+  if (pageSize !== "all") {
+    query += " LIMIT ? OFFSET ?";
+    params.push(pageSize, (page - 1) * pageSize);
+  }
+
+  const [rows] = await db.query<RejectedLeadListRow[]>(query, params);
+
+  return {
+    leads: rows,
+    total,
+    page,
+    totalPages,
+    pageSize,
+    sort,
+  };
 }
