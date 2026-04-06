@@ -4,20 +4,20 @@ import { db } from "@/lib/db";
 
 type LeadRow = RowDataPacket & {
   id: number;
-  name: string;
-  email: string;
+  name: string | null;
+  email: string | null;
   created_at: string;
-  ip_address: string;
-  status: string;
-  segment: string;
-  total_score: number;
+  ip_address: string | null;
+  status: string | null;
+  segment: string | null;
+  total_score: number | null;
 };
 
 type CountRow = RowDataPacket & {
-  total: number;
+  count: number;
 };
 
-type DayStatRow = RowDataPacket & {
+type StatRow = RowDataPacket & {
   day: string;
   count: number;
 };
@@ -32,18 +32,38 @@ type SegmentStatRow = RowDataPacket & {
   count: number;
 };
 
-type TodayNewRow = RowDataPacket & {
-  todayNew: number;
-};
-
-type FollowUpRow = RowDataPacket & {
-  toFollowUp: number;
-};
-
 type IpStatRow = RowDataPacket & {
   ip_address: string;
   count: number;
 };
+
+const PAGE_SIZE_OPTIONS = new Set(["10", "25", "50", "100", "all"]);
+
+function parsePage(value: string | null): number {
+  const parsed = Number.parseInt(value ?? "1", 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+function parsePageSize(value: string | null): number | "all" {
+  if (!value || !PAGE_SIZE_OPTIONS.has(value)) {
+    return 25;
+  }
+
+  if (value === "all") {
+    return "all";
+  }
+
+  return Number.parseInt(value, 10);
+}
+
+function parseSort(value: string | null): "newest" | "oldest" {
+  return value === "oldest" ? "oldest" : "newest";
+}
 
 export async function GET(req: NextRequest) {
   const token = req.headers.get("authorization");
@@ -52,126 +72,139 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { searchParams } = new URL(req.url);
-  const page = Number(searchParams.get("page")) || 1;
-  const limit = 20;
-  const offset = (page - 1) * limit;
-
   try {
-    const search = searchParams.get("search") || "";
-    const statusFilter = searchParams.get("status");
-    const dateFrom = searchParams.get("from");
-    const dateTo = searchParams.get("to");
+    const searchParams = req.nextUrl.searchParams;
+    const page = parsePage(searchParams.get("page"));
+    const pageSize = parsePageSize(searchParams.get("pageSize"));
+    const sort = parseSort(searchParams.get("sort"));
+    const search = searchParams.get("search")?.trim() ?? "";
+    const status = searchParams.get("status")?.trim() ?? "";
+    const from = searchParams.get("from")?.trim() ?? "";
+    const to = searchParams.get("to")?.trim() ?? "";
 
-    const whereParts: string[] = [];
+    const whereClauses: string[] = [];
     const values: Array<string | number> = [];
 
     if (search) {
-      whereParts.push("email LIKE ?");
-      values.push(`%${search}%`);
+      const like = `%${search}%`;
+      whereClauses.push("(name LIKE ? OR email LIKE ? OR ip_address LIKE ?)");
+      values.push(like, like, like);
     }
 
-    if (statusFilter) {
-      whereParts.push("status = ?");
-      values.push(statusFilter);
+    if (status) {
+      whereClauses.push("status = ?");
+      values.push(status);
     }
 
-    if (dateFrom && dateTo) {
-      whereParts.push("DATE(created_at) BETWEEN ? AND ?");
-      values.push(dateFrom, dateTo);
+    if (from) {
+      whereClauses.push("DATE(created_at) >= ?");
+      values.push(from);
     }
 
-    const whereClause = whereParts.length
-      ? `WHERE ${whereParts.join(" AND ")}`
-      : "";
+    if (to) {
+      whereClauses.push("DATE(created_at) <= ?");
+      values.push(to);
+    }
 
-    const [countRows] = await db.query<CountRow[]>(
-      `
-      SELECT COUNT(*) as total
-      FROM leads
-      ${whereClause}
-      `,
+    const whereSql =
+      whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+    const orderDirection = sort === "oldest" ? "ASC" : "DESC";
+
+    const [totalRows] = await db.query<CountRow[]>(
+      `SELECT COUNT(*) AS count FROM leads ${whereSql}`,
       values,
     );
-    const total = countRows[0]?.total ?? 0;
 
-    const [rows] = await db.query<LeadRow[]>(
-      `
-      SELECT 
-        id,
-        name,
-        email,
-        created_at,
-        ip_address,
-        status,
-        segment,
-        total_score
-      FROM leads
-      ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-      `,
-      [...values, limit, offset],
-    );
+    const total = Number(totalRows[0]?.count ?? 0);
+    const totalPages =
+      pageSize === "all" ? 1 : Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = pageSize === "all" ? 1 : Math.min(page, totalPages);
 
-    const [stats] = await db.query<DayStatRow[]>(`
-      SELECT DATE(created_at) as day, COUNT(*) as count
+    const leadValues = [...values];
+    let leadQuery = `
+      SELECT id, name, email, created_at, ip_address, status, segment, total_score
       FROM leads
-      GROUP BY day
-      ORDER BY day DESC
-      LIMIT 30
+      ${whereSql}
+      ORDER BY created_at ${orderDirection}, id ${orderDirection}
+    `;
+
+    if (pageSize !== "all") {
+      leadQuery += " LIMIT ? OFFSET ?";
+      leadValues.push(pageSize, (currentPage - 1) * pageSize);
+    }
+
+    const [leads] = await db.query<LeadRow[]>(leadQuery, leadValues);
+
+    const [stats] = await db.query<StatRow[]>(`
+      SELECT day, count
+      FROM (
+        SELECT
+          DATE_FORMAT(DATE(created_at), '%Y-%m-%d') AS day,
+          COUNT(*) AS count
+        FROM leads
+        GROUP BY DATE(created_at)
+        ORDER BY DATE(created_at) DESC
+        LIMIT 14
+      ) recent_days
+      ORDER BY day ASC
     `);
 
     const [statusStats] = await db.query<StatusStatRow[]>(`
-      SELECT status, COUNT(*) as count
+      SELECT COALESCE(status, 'new') AS status, COUNT(*) AS count
       FROM leads
-      GROUP BY status
+      GROUP BY COALESCE(status, 'new')
+      ORDER BY count DESC
     `);
 
     const [segmentStats] = await db.query<SegmentStatRow[]>(`
-      SELECT segment, COUNT(*) as count
+      SELECT COALESCE(segment, 'unknown') AS segment, COUNT(*) AS count
       FROM leads
-      GROUP BY segment
+      GROUP BY COALESCE(segment, 'unknown')
+      ORDER BY count DESC
     `);
-
-    const [todayRows] = await db.query<TodayNewRow[]>(`
-      SELECT COUNT(*) as todayNew
-      FROM leads
-      WHERE status = 'new'
-      AND DATE(created_at) = CURDATE()
-    `);
-    const todayNew = todayRows[0]?.todayNew ?? 0;
-
-    const [followUpRows] = await db.query<FollowUpRow[]>(`
-      SELECT COUNT(*) as toFollowUp
-      FROM leads
-      WHERE status = 'contacted'
-      AND DATE(contacted_at) = CURDATE()
-    `);
-    const toFollowUp = followUpRows[0]?.toFollowUp ?? 0;
 
     const [ipStats] = await db.query<IpStatRow[]>(`
-      SELECT ip_address, COUNT(*) as count
+      SELECT ip_address, COUNT(*) AS count
       FROM leads
+      WHERE ip_address IS NOT NULL AND ip_address <> ''
       GROUP BY ip_address
-      HAVING count > 1
-      ORDER BY count DESC
+      HAVING COUNT(*) > 1
+      ORDER BY count DESC, ip_address ASC
       LIMIT 10
     `);
 
+    const [todayRows] = await db.query<CountRow[]>(`
+      SELECT COUNT(*) AS count
+      FROM leads
+      WHERE DATE(created_at) = CURDATE()
+    `);
+
+    const [followUpRows] = await db.query<CountRow[]>(`
+      SELECT COUNT(*) AS count
+      FROM leads
+      WHERE status = 'contacted' AND DATE(contacted_at) = CURDATE()
+    `);
+
     return NextResponse.json({
-      leads: rows,
-      total,
+      leads,
       stats,
+      total,
+      page: currentPage,
+      totalPages,
+      pageSize,
+      sort,
       statusStats,
-      segmentStats,
-      todayNew,
-      toFollowUp,
+      todayNew: Number(todayRows[0]?.count ?? 0),
+      toFollowUp: Number(followUpRows[0]?.count ?? 0),
       ipStats,
-      page,
-      totalPages: Math.ceil(total / limit),
+      segmentStats,
     });
-  } catch {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  } catch (error) {
+    console.error("Admin leads fetch failed:", error);
+
+    return NextResponse.json(
+      { error: "Could not load admin leads" },
+      { status: 500 },
+    );
   }
 }
