@@ -506,6 +506,7 @@ function buildQueries(config: TaskConfig): string[] {
   const queryDepth = getQueryDepthBySpeed(config.speed);
 
   for (const keyword of keywords) {
+    const normalizedKeyword = normalizeSignalText(keyword);
     const broadKeywordLeadTerms = getBroadKeywordLeadTerms(keyword, config);
     const broadKeyword = broadKeywordLeadTerms.length > 0;
     const searchExclusionTerms = getSearchExclusionTerms(keyword);
@@ -532,7 +533,9 @@ function buildQueries(config: TaskConfig): string[] {
     );
 
     const effectiveQueryDepth = broadKeyword
-      ? Math.min(queryDepth + 1, 6)
+      ? isHealthLikeKeyword(normalizedKeyword)
+        ? Math.min(queryDepth + 2, 7)
+        : Math.min(queryDepth + 1, 6)
       : queryDepth;
 
     for (const variant of finalizedVariants.slice(0, effectiveQueryDepth)) {
@@ -945,25 +948,21 @@ function getBroadKeywordLeadTerms(
 
   const entityTypes = new Set(config.entity_type ?? []);
   const terms: string[] = [];
-  const healthLikeKeyword =
-    normalizedKeyword.includes("zdrow") ||
-    normalizedKeyword.includes("samolecz") ||
-    normalizedKeyword.includes("wellness") ||
-    normalizedKeyword.includes("terap") ||
-    normalizedKeyword.includes("rehabil");
-  const beautyLikeKeyword =
-    normalizedKeyword.includes("urod") ||
-    normalizedKeyword.includes("kosmet") ||
-    normalizedKeyword.includes("estety");
+  const healthLikeKeyword = isHealthLikeKeyword(normalizedKeyword);
+  const beautyLikeKeyword = isBeautyLikeKeyword(normalizedKeyword);
 
   if (healthLikeKeyword) {
     terms.push(
+      "prywatny gabinet",
       "gabinet",
       "terapia",
+      "konsultacja",
       "cennik",
       "umow wizyte",
-      "prywatnie",
-      "klinika",
+      "rejestracja",
+      "telefon",
+      "klinika prywatna",
+      "oferta",
     );
   }
 
@@ -973,6 +972,8 @@ function getBroadKeywordLeadTerms(
       "salon",
       "cennik",
       "umow wizyte",
+      "rezerwacja",
+      "konsultacja",
       "kosmetologia",
       "medycyna estetyczna",
     );
@@ -989,7 +990,7 @@ function getBroadKeywordLeadTerms(
   }
 
   if (entityTypes.has("shop")) {
-    terms.push("sklep", "produkty");
+    terms.push("sklep", "produkty", "zamow");
   }
 
   terms.push("kontakt", "oferta");
@@ -1007,6 +1008,24 @@ function getBroadKeywordLeadTerms(
   }
 
   return [...new Set(terms)];
+}
+
+function isHealthLikeKeyword(normalizedKeyword: string): boolean {
+  return (
+    normalizedKeyword.includes("zdrow") ||
+    normalizedKeyword.includes("samolecz") ||
+    normalizedKeyword.includes("wellness") ||
+    normalizedKeyword.includes("terap") ||
+    normalizedKeyword.includes("rehabil")
+  );
+}
+
+function isBeautyLikeKeyword(normalizedKeyword: string): boolean {
+  return (
+    normalizedKeyword.includes("urod") ||
+    normalizedKeyword.includes("kosmet") ||
+    normalizedKeyword.includes("estety")
+  );
 }
 
 function isBroadLeadKeyword(normalizedKeyword: string): boolean {
@@ -1057,13 +1076,16 @@ function getSearchExclusionTerms(keyword: string): string[] {
   ];
 
   if (
-    normalizedKeyword.includes("zdrow") ||
-    normalizedKeyword.includes("samolecz") ||
-    normalizedKeyword.includes("wellness") ||
-    normalizedKeyword.includes("terap") ||
-    normalizedKeyword.includes("rehabil")
+    isHealthLikeKeyword(normalizedKeyword)
   ) {
-    terms.push("publiczny", "fundusz");
+    terms.push(
+      "publiczny",
+      "fundusz",
+      "szpital",
+      "fundacja",
+      "instytut",
+      "uniwersytet",
+    );
   }
 
   return [...new Set(terms)];
