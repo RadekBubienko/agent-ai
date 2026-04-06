@@ -113,7 +113,7 @@ export default function AgentLeadsPage() {
         }}
       />
 
-      <div className="mb-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="ui-panel mb-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-2 text-sm font-medium text-gray-700">
@@ -157,7 +157,7 @@ export default function AgentLeadsPage() {
         {leads.map((lead) => (
           <article
             key={lead.id}
-            className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
+            className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
           >
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
@@ -229,13 +229,13 @@ export default function AgentLeadsPage() {
         ))}
 
         {leads.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+          <div className="ui-panel rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
             Brak leadów dla wybranych filtrów.
           </div>
         ) : null}
       </div>
 
-      <div className="hidden overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm lg:block">
+      <div className="ui-panel hidden overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm lg:block">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1120px]">
             <thead className="bg-gray-50 text-left">

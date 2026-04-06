@@ -68,21 +68,21 @@ export default function AgentDashboard() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Wszystkie zadania</p>
           <p className="mt-2 text-3xl font-semibold text-gray-900">
             {tasks.length}
           </p>
         </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Aktywne</p>
           <p className="mt-2 text-3xl font-semibold text-blue-700">
             {tasks.filter((task) => task.status === "running").length}
           </p>
         </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Znalezione leady</p>
           <p className="mt-2 text-3xl font-semibold text-emerald-700">
             {tasks.reduce((total, task) => total + task.leads_found, 0)}
@@ -94,7 +94,7 @@ export default function AgentDashboard() {
         {tasks.map((task) => (
           <article
             key={task.id}
-            className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
+            className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
@@ -132,14 +132,14 @@ export default function AgentDashboard() {
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 href={`/agent/tasks/${task.id}`}
-                className="inline-flex rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                className="ui-pressable inline-flex rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
               >
                 Podgląd taska
               </Link>
 
               <Link
                 href="/agent/leads"
-                className="inline-flex rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+                className="ui-pressable inline-flex rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
               >
                 Zobacz leady
               </Link>
@@ -148,13 +148,13 @@ export default function AgentDashboard() {
         ))}
 
         {tasks.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+          <div className="ui-panel rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
             Brak zadań do wyświetlenia.
           </div>
         ) : null}
       </div>
 
-      <div className="hidden overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm md:block">
+      <div className="ui-panel hidden overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px]">
             <thead className="bg-gray-50 text-left">
@@ -194,14 +194,14 @@ export default function AgentDashboard() {
                     <div className="flex flex-wrap gap-2">
                       <Link
                         href={`/agent/tasks/${task.id}`}
-                        className="inline-flex rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                        className="ui-pressable inline-flex rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
                       >
                         Podgląd taska
                       </Link>
 
                       <Link
                         href="/agent/leads"
-                        className="inline-flex rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+                        className="ui-pressable inline-flex rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
                       >
                         Zobacz leady
                       </Link>

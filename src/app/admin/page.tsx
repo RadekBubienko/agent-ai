@@ -179,7 +179,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-10">
-      <div className="max-w-6xl mx-auto bg-white p-6 rounded-xl shadow">
+      <div className="ui-panel max-w-6xl mx-auto bg-white p-6 rounded-xl shadow">
         <h1 className="text-2xl font-bold mb-6">Dashboard Lead Generation</h1>
 
         {leads.length === 0 && (
@@ -204,15 +204,15 @@ export default function AdminPage() {
           <>
             {/* KPI */}
             <div className="grid grid-cols-3 gap-4 mb-8">
-              <div className="bg-gray-100 p-4 rounded">
+              <div className="ui-panel bg-gray-100 p-4 rounded">
                 <p className="text-sm text-gray-500">Łącznie leadów</p>
                 <p className="text-2xl font-bold">{total}</p>
               </div>
-              <div className="bg-gray-100 p-4 rounded">
+              <div className="ui-panel bg-gray-100 p-4 rounded">
                 <p className="text-sm text-gray-500">Strona</p>
                 <p className="text-2xl font-bold">{page}</p>
               </div>
-              <div className="bg-gray-100 p-4 rounded">
+              <div className="ui-panel bg-gray-100 p-4 rounded">
                 <p className="text-sm text-gray-500">Maks / dzień</p>
                 <p className="text-2xl font-bold">{maxDay}</p>
               </div>
@@ -220,23 +220,23 @@ export default function AdminPage() {
 
             <div className="grid grid-cols-3 gap-4 mb-8">
               {statusStats.map((s, i) => (
-                <div key={i} className="bg-gray-100 p-4 rounded">
+                <div key={i} className="ui-panel bg-gray-100 p-4 rounded">
                   <p className="text-sm text-gray-500">{s.status}</p>
                   <p className="text-2xl font-bold">{s.count}</p>
                 </div>
               ))}
-              <div className="bg-red-100 p-4 rounded">
+              <div className="ui-panel bg-red-100 p-4 rounded">
                 <p className="text-sm">Nowe dziś</p>
                 <p className="text-2xl font-bold">{todayNew}</p>
               </div>
-              <div className="bg-yellow-100 p-4 rounded">
+              <div className="ui-panel bg-yellow-100 p-4 rounded">
                 <p className="text-sm">Skontaktowane dziś</p>
                 <p className="text-2xl font-bold">{toFollowUp}</p>
               </div>
             </div>
             <div className="grid grid-cols-4 gap-4 mb-8">
               {segmentStats.map((s, i) => (
-                <div key={i} className="bg-blue-50 p-4 rounded">
+                <div key={i} className="ui-panel bg-blue-50 p-4 rounded">
                   <p className="text-sm text-gray-500">{s.segment}</p>
                   <p className="text-2xl font-bold">{s.count}</p>
                 </div>

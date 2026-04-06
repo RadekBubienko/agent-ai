@@ -24,7 +24,7 @@ export default function SignalTeaser() {
 
         <Link
           href="/jak-to-dziala"
-          className="inline-block mt-6 px-8 py-4 rounded-xl bg-blue-600 text-white text-lg hover:bg-blue-700 transition"
+          className="ui-pressable mt-6 inline-block rounded-xl bg-blue-600 px-8 py-4 text-lg text-white transition hover:bg-blue-700"
         >
           Zobacz jak działa ta technologia
         </Link>

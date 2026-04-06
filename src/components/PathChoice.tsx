@@ -39,21 +39,21 @@ export default function PathChoice() {
           <div className="space-y-4 text-lg">
             <button
               onClick={() => handleChoice("product")}
-              className="block w-full border p-5 rounded-lg hover:bg-white hover:text-black"
+              className="ui-panel block w-full rounded-lg border p-5 hover:bg-white hover:text-black"
             >
               Chcę poznać produkt
             </button>
 
             <button
               onClick={() => handleChoice("business")}
-              className="block w-full border p-5 rounded-lg hover:bg-white hover:text-black"
+              className="ui-panel block w-full rounded-lg border p-5 hover:bg-white hover:text-black"
             >
               Interesuje mnie model współpracy
             </button>
 
             <button
               onClick={() => handleChoice("education")}
-              className="block w-full border p-5 rounded-lg hover:bg-white hover:text-black"
+              className="ui-panel block w-full rounded-lg border p-5 hover:bg-white hover:text-black"
             >
               Na razie chcę tylko zrozumieć jak to działa
             </button>
@@ -70,7 +70,7 @@ export default function PathChoice() {
         </div>
 
         {success && (
-          <div className="mt-12 p-6 bg-green-900/40 border border-green-500 rounded-xl text-center max-w-xl mx-auto">
+          <div className="ui-panel mx-auto mt-12 max-w-xl rounded-xl border border-green-500 bg-green-900/40 p-6 text-center">
             <h3 className="text-xl font-semibold mb-2">
               Sprawdź swoją skrzynkę
             </h3>

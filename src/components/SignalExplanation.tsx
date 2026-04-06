@@ -20,7 +20,7 @@ export default function SignalExplanation() {
           </p>
         </div>
 
-        <div className="w-full max-w-3xl mx-auto aspect-video rounded-2xl overflow-hidden shadow-lg bg-black">
+        <div className="ui-panel mx-auto aspect-video w-full max-w-3xl overflow-hidden rounded-2xl bg-black shadow-lg">
           <video
             ref={videoRef}
             autoPlay
@@ -55,7 +55,7 @@ export default function SignalExplanation() {
         <div className="pt-6">
           <Link
             href="#wybor"
-            className="inline-block rounded-xl bg-blue-600 px-10 py-4 text-lg text-white transition hover:bg-blue-700"
+            className="ui-pressable inline-block rounded-xl bg-blue-600 px-10 py-4 text-lg text-white transition hover:bg-blue-700"
           >
             Co chcesz zrobić dalej?
           </Link>

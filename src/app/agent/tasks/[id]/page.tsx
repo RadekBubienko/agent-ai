@@ -135,7 +135,7 @@ export default function AgentTaskDetailsPage() {
             setLoading(true);
             void fetchTaskView();
           }}
-          className="inline-flex rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+          className="ui-pressable inline-flex rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
         >
           Odśwież teraz
         </button>
@@ -148,13 +148,13 @@ export default function AgentTaskDetailsPage() {
       </div>
 
       {error ? (
-        <div className="mb-6 rounded-3xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+        <div className="ui-panel mb-6 rounded-3xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Status</p>
           <div className="mt-3">
             <span
@@ -165,14 +165,14 @@ export default function AgentTaskDetailsPage() {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Leady zapisane</p>
           <p className="mt-2 text-3xl font-semibold text-gray-900">
             {task?.leads_found ?? 0}
           </p>
         </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Utworzone</p>
           <p className="mt-2 text-base font-semibold text-gray-900">
             {task ? formatPolishDateTime(task.created_at) : "-"}

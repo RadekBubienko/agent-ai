@@ -63,7 +63,7 @@ export default function RejectedLeadsPage() {
         }}
       />
 
-      <div className="mb-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="ui-panel mb-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500">Łącznie odrzuconych</p>
@@ -82,7 +82,7 @@ export default function RejectedLeadsPage() {
         {leads.map((lead) => (
           <article
             key={lead.id}
-            className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
+            className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
           >
             <div className="mb-4">
               <h2 className="text-base font-semibold text-gray-900">
@@ -133,13 +133,13 @@ export default function RejectedLeadsPage() {
         ))}
 
         {leads.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+          <div className="ui-panel rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
             Brak odrzuconych leadów.
           </div>
         ) : null}
       </div>
 
-      <div className="hidden overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm lg:block">
+      <div className="ui-panel hidden overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm lg:block">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1180px]">
             <thead className="bg-gray-50 text-left">

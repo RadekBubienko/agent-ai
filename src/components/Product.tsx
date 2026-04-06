@@ -6,14 +6,16 @@ export default function Product() {
       </h2>
 
       <p className="text-lg text-gray-700">
-        LifeWave to technologia wykorzystująca sygnały fotoniczne zamiast
+        LifeWave to technologia wykorzystujaca sygnaly fotoniczne zamiast
         tradycyjnej suplementacji.
       </p>
 
       <div className="grid gap-6 text-lg md:grid-cols-3">
-        <div className="rounded-xl border p-6">bez substancji chemicznych</div>
-        <div className="rounded-xl border p-6">bez stymulantów</div>
-        <div className="rounded-xl border p-6">bez suplementów</div>
+        <div className="ui-panel rounded-xl border p-6">
+          bez substancji chemicznych
+        </div>
+        <div className="ui-panel rounded-xl border p-6">bez stymulantow</div>
+        <div className="ui-panel rounded-xl border p-6">bez suplementow</div>
       </div>
     </section>
   );

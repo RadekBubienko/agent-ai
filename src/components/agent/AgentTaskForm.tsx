@@ -2,6 +2,48 @@
 
 import { useState } from "react";
 
+const KEYWORD_SUGGESTION_GROUPS = [
+  {
+    triggers: ["samoleczenie"],
+    suggestions: [
+      "autoterapia",
+      "terapia holistyczna",
+      "medycyna integracyjna",
+      "biohacking",
+    ],
+  },
+  {
+    triggers: ["zdrowie", "wellness"],
+    suggestions: [
+      "biohacking",
+      "longevity",
+      "medycyna funkcjonalna",
+      "klinika prywatna",
+    ],
+  },
+  {
+    triggers: ["uroda"],
+    suggestions: [
+      "medycyna estetyczna",
+      "kosmetologia",
+      "beauty clinic",
+      "salon kosmetologiczny",
+    ],
+  },
+  {
+    triggers: ["autoterapia"],
+    suggestions: [
+      "terapia holistyczna",
+      "medycyna integracyjna",
+      "biohacking",
+    ],
+  },
+  {
+    triggers: ["biohacking"],
+    suggestions: ["longevity", "medycyna funkcjonalna", "wellness"],
+  },
+];
+
 type TaskConfig = {
   geo: {
     mode: string;
@@ -25,10 +67,57 @@ type TaskConfig = {
   speed: "fast" | "medium" | "slow";
 };
 
-export default function AgentTaskForm() {
+function normalizeKeyword(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
 
+function getKeywordSuggestions(keywords: string[], keywordInput: string) {
+  const activeKeywords = [...keywords, keywordInput].filter(Boolean);
+  const normalizedKeywords = activeKeywords.map(normalizeKeyword);
+  const existing = new Set(keywords.map(normalizeKeyword));
+  const suggestions: string[] = [];
+
+  for (const group of KEYWORD_SUGGESTION_GROUPS) {
+    const matches = group.triggers.some((trigger) =>
+      normalizedKeywords.some((keyword) => keyword.includes(trigger)),
+    );
+
+    if (!matches) {
+      continue;
+    }
+
+    for (const suggestion of group.suggestions) {
+      const normalizedSuggestion = normalizeKeyword(suggestion);
+
+      if (
+        existing.has(normalizedSuggestion) ||
+        normalizedKeywords.some((keyword) => keyword === normalizedSuggestion) ||
+        suggestions.some(
+          (currentSuggestion) =>
+            normalizeKeyword(currentSuggestion) === normalizedSuggestion,
+        )
+      ) {
+        continue;
+      }
+
+      suggestions.push(suggestion);
+    }
+  }
+
+  return suggestions;
+}
+
+export default function AgentTaskForm() {
   const [step, setStep] = useState(1);
   const [keywordInput, setKeywordInput] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [aiSuggestionMessage, setAiSuggestionMessage] = useState("");
+  const [isAiSuggestionLoading, setIsAiSuggestionLoading] = useState(false);
 
   const [form, setForm] = useState<TaskConfig>({
     geo: {
@@ -53,76 +142,157 @@ export default function AgentTaskForm() {
     speed: "slow",
   });
 
+  const suggestedKeywords = getKeywordSuggestions(
+    form.industry.keywords,
+    keywordInput,
+  );
+
   function toggleArray(field: "entity_type" | "sources", value: string) {
     setForm((prev) => {
       const arr = prev[field];
+
       return {
         ...prev,
         [field]: arr.includes(value)
-          ? arr.filter((v) => v !== value)
+          ? arr.filter((item) => item !== value)
           : [...arr, value],
       };
     });
   }
 
-  function addKeyword() {
-    if (!keywordInput.trim()) return;
+  function addKeywordValue(value: string) {
+    const trimmed = value.trim().replace(/\s+/g, " ");
 
+    if (!trimmed) {
+      return;
+    }
+
+    setForm((prev) => {
+      const normalizedNewKeyword = normalizeKeyword(trimmed);
+      const alreadyExists = prev.industry.keywords.some(
+        (keyword) => normalizeKeyword(keyword) === normalizedNewKeyword,
+      );
+
+      if (alreadyExists) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        industry: {
+          ...prev.industry,
+          keywords: [...prev.industry.keywords, trimmed],
+        },
+      };
+    });
+
+    setAiSuggestions((prev) =>
+      prev.filter(
+        (suggestion) => normalizeKeyword(suggestion) !== normalizeKeyword(trimmed),
+      ),
+    );
+  }
+
+  function addKeyword() {
+    if (!keywordInput.trim()) {
+      return;
+    }
+
+    addKeywordValue(keywordInput);
+    setKeywordInput("");
+  }
+
+  function removeKeyword(keywordToRemove: string) {
     setForm((prev) => ({
       ...prev,
       industry: {
         ...prev.industry,
-        keywords: [...prev.industry.keywords, keywordInput],
+        keywords: prev.industry.keywords.filter(
+          (keyword) => keyword !== keywordToRemove,
+        ),
       },
     }));
+  }
 
-    setKeywordInput("");
+  async function loadAiSuggestions() {
+    const candidateKeywords = [...form.industry.keywords, keywordInput]
+      .map((keyword) => keyword.trim())
+      .filter(Boolean);
+
+    if (candidateKeywords.length === 0) {
+      setAiSuggestions([]);
+      setAiSuggestionMessage("Dodaj lub wpisz najpierw slowo kluczowe.");
+      return;
+    }
+
+    setIsAiSuggestionLoading(true);
+    setAiSuggestionMessage("");
+
+    try {
+      const res = await fetch("/api/agent/keyword-suggestions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          keywords: form.industry.keywords,
+          keywordInput,
+          entity_type: form.entity_type,
+          geo: form.geo,
+          maxSuggestions: 6,
+        }),
+      });
+
+      const data = await res.json();
+      const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
+
+      setAiSuggestions(suggestions);
+      setAiSuggestionMessage(
+        typeof data?.message === "string"
+          ? data.message
+          : suggestions.length > 0
+            ? "Gotowe propozycje slow kluczowych."
+            : "",
+      );
+    } catch (error) {
+      console.error("AI keyword suggestion error:", error);
+      setAiSuggestions([]);
+      setAiSuggestionMessage("Nie udalo sie pobrac podpowiedzi AI.");
+    } finally {
+      setIsAiSuggestionLoading(false);
+    }
   }
 
   async function submitTask() {
+    try {
+      const res = await fetch("/api/agent/start-task", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
 
-  try {
+      const data = await res.json();
 
-    const res = await fetch("/api/agent/start-task",{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json"
-      },
-      body: JSON.stringify(form)
-    })
-
-    const data = await res.json()
-
-    console.log("Agent started:", data)
-
-    alert("Agent uruchomiony")
-
-  } catch(err){
-
-    console.error("Agent error:", err)
-
-    alert("Błąd uruchamiania agenta")
-
+      console.log("Agent started:", data);
+      alert("Agent uruchomiony");
+    } catch (err) {
+      console.error("Agent error:", err);
+      alert("Blad uruchamiania agenta");
+    }
   }
 
-}
-
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white shadow rounded-xl">
-
-      <h2 className="text-xl font-bold mb-6">
-        Konfiguracja zadania – Agent AI
-      </h2>
-
-      {/* STEP 1 */}
+    <div className="ui-panel mx-auto max-w-2xl rounded-xl bg-white p-6 shadow">
+      <h2 className="mb-6 text-xl font-bold">Konfiguracja zadania - Agent AI</h2>
 
       {step === 1 && (
         <div className="space-y-4">
-
-          <h3 className="font-semibold">1. Gdzie szukać</h3>
+          <h3 className="font-semibold">1. Gdzie szukac</h3>
 
           <select
-            className="w-full border p-2 rounded"
+            className="w-full rounded border p-2"
             value={form.geo.mode}
             onChange={(e) =>
               setForm({
@@ -138,7 +308,7 @@ export default function AgentTaskForm() {
 
           <input
             placeholder="Kraj"
-            className="w-full border p-2 rounded"
+            className="w-full rounded border p-2"
             value={form.geo.country}
             onChange={(e) =>
               setForm({
@@ -149,8 +319,8 @@ export default function AgentTaskForm() {
           />
 
           <input
-            placeholder="Województwo"
-            className="w-full border p-2 rounded"
+            placeholder="Wojewodztwo"
+            className="w-full rounded border p-2"
             value={form.geo.region}
             onChange={(e) =>
               setForm({
@@ -162,7 +332,7 @@ export default function AgentTaskForm() {
 
           <input
             placeholder="Miasto"
-            className="w-full border p-2 rounded"
+            className="w-full rounded border p-2"
             value={form.geo.city}
             onChange={(e) =>
               setForm({
@@ -174,8 +344,8 @@ export default function AgentTaskForm() {
 
           <input
             type="number"
-            placeholder="Promień km"
-            className="w-full border p-2 rounded"
+            placeholder="Promien km"
+            className="w-full rounded border p-2"
             value={form.geo.radius_km}
             onChange={(e) =>
               setForm({
@@ -188,7 +358,7 @@ export default function AgentTaskForm() {
           <label className="block space-y-2">
             <span className="font-medium">Tempo pracy</span>
             <select
-              className="w-full border p-2 rounded"
+              className="w-full rounded border p-2"
               value={form.speed}
               onChange={(e) =>
                 setForm({
@@ -198,48 +368,121 @@ export default function AgentTaskForm() {
               }
             >
               <option value="fast">Szybko - mniej sprawdza</option>
-              <option value="medium">Średnio - balans</option>
-              <option value="slow">Dokładniej - więcej leadów</option>
+              <option value="medium">Srednio - balans</option>
+              <option value="slow">Dokladniej - wiecej leadow</option>
             </select>
           </label>
-
         </div>
       )}
 
-      {/* STEP 2 */}
-
       {step === 2 && (
         <div className="space-y-4">
-
-          <h3 className="font-semibold">2. Kogo szukać</h3>
+          <h3 className="font-semibold">2. Kogo szukac</h3>
 
           <div className="flex gap-2">
             <input
-              className="border p-2 rounded w-full"
-              placeholder="Słowo kluczowe"
+              className="w-full rounded border p-2"
+              placeholder="Slowo kluczowe"
               value={keywordInput}
               onChange={(e) => setKeywordInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addKeyword();
+                }
+              }}
             />
             <button
+              type="button"
               onClick={addKeyword}
-              className="bg-black text-white px-3 rounded"
+              className="rounded bg-black px-3 text-white"
             >
               +
             </button>
           </div>
 
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={loadAiSuggestions}
+              disabled={isAiSuggestionLoading}
+              className="rounded border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isAiSuggestionLoading
+                ? "Pobieranie podpowiedzi AI..."
+                : "Podpowiedz slowa z AI"}
+            </button>
+            <p className="text-sm text-gray-500">
+              Szkielet gotowy. Na razie bezpiecznie wylaczone flaga.
+            </p>
+          </div>
+
+          {suggestedKeywords.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm font-medium text-amber-900">
+                Podpowiedzi lepszych fraz
+              </p>
+              <p className="mt-1 text-sm text-amber-800">
+                Dla szerokich hasel lepiej dzialaja bardziej konkretne slowa
+                kluczowe.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {suggestedKeywords.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => addKeywordValue(suggestion)}
+                    className="rounded-full border border-amber-300 bg-white px-3 py-1 text-sm text-amber-900 hover:bg-amber-100"
+                  >
+                    + {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(aiSuggestionMessage || aiSuggestions.length > 0) && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+              <p className="text-sm font-medium text-blue-900">
+                Podpowiedzi AI
+              </p>
+              {aiSuggestionMessage && (
+                <p className="mt-1 text-sm text-blue-800">
+                  {aiSuggestionMessage}
+                </p>
+              )}
+              {aiSuggestions.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {aiSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => addKeywordValue(suggestion)}
+                      className="rounded-full border border-blue-300 bg-white px-3 py-1 text-sm text-blue-900 hover:bg-blue-100"
+                    >
+                      + {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
-            {form.industry.keywords.map((k) => (
-              <span
-                key={k}
-                className="bg-gray-200 px-3 py-1 rounded text-sm"
+            {form.industry.keywords.map((keyword) => (
+              <button
+                key={keyword}
+                type="button"
+                onClick={() => removeKeyword(keyword)}
+                className="rounded bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300"
+                title="Usun slowo kluczowe"
               >
-                {k}
-              </span>
+                {keyword} x
+              </button>
             ))}
           </div>
 
-          <h4 className="font-medium pt-4">Typ podmiotu</h4>
+          <h4 className="pt-4 font-medium">Typ podmiotu</h4>
 
           {["company", "person", "influencer", "shop", "mlm_prospect"].map(
             (type) => (
@@ -251,18 +494,14 @@ export default function AgentTaskForm() {
                 />{" "}
                 {type}
               </label>
-            )
+            ),
           )}
-
         </div>
       )}
 
-      {/* STEP 3 */}
-
       {step === 3 && (
         <div className="space-y-4">
-
-          <h3 className="font-semibold">3. Skąd pobierać dane</h3>
+          <h3 className="font-semibold">3. Skad pobierac dane</h3>
 
           {[
             "google",
@@ -284,7 +523,7 @@ export default function AgentTaskForm() {
             </label>
           ))}
 
-          <h4 className="font-medium pt-4">Filtry jakości</h4>
+          <h4 className="pt-4 font-medium">Filtry jakosci</h4>
 
           <label className="block">
             <input
@@ -299,7 +538,7 @@ export default function AgentTaskForm() {
                   },
                 })
               }
-            />
+            />{" "}
             wymagany email
           </label>
 
@@ -316,7 +555,7 @@ export default function AgentTaskForm() {
                   },
                 })
               }
-            />
+            />{" "}
             wymagany telefon
           </label>
 
@@ -333,14 +572,14 @@ export default function AgentTaskForm() {
                   },
                 })
               }
-            />
+            />{" "}
             wymagane WWW
           </label>
 
           <input
             type="number"
-            className="border p-2 rounded w-full"
-            placeholder="Limit leadów"
+            className="w-full rounded border p-2"
+            placeholder="Limit leadow"
             value={form.limit}
             onChange={(e) =>
               setForm({
@@ -349,18 +588,15 @@ export default function AgentTaskForm() {
               })
             }
           />
-
         </div>
       )}
 
-      {/* NAVIGATION */}
-
       <div className="flex justify-between pt-6">
-
         {step > 1 && (
           <button
+            type="button"
             onClick={() => setStep(step - 1)}
-            className="px-4 py-2 border rounded"
+            className="rounded border px-4 py-2"
           >
             Wstecz
           </button>
@@ -368,8 +604,9 @@ export default function AgentTaskForm() {
 
         {step < 3 && (
           <button
+            type="button"
             onClick={() => setStep(step + 1)}
-            className="px-4 py-2 bg-black text-white rounded"
+            className="rounded bg-black px-4 py-2 text-white"
           >
             Dalej
           </button>
@@ -377,15 +614,14 @@ export default function AgentTaskForm() {
 
         {step === 3 && (
           <button
+            type="button"
             onClick={submitTask}
-            className="px-4 py-2 bg-green-600 text-white rounded"
+            className="rounded bg-green-600 px-4 py-2 text-white"
           >
             Uruchom Agenta
           </button>
         )}
-
       </div>
-
     </div>
   );
 }
