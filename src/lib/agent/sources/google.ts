@@ -471,7 +471,11 @@ function buildQueries(config: TaskConfig): string[] {
           ...variants.filter((variant) => variant !== joinQueryParts(keyword, location)),
         ];
 
-    for (const variant of prioritizedVariants.slice(0, queryDepth)) {
+    const effectiveQueryDepth = broadKeyword
+      ? Math.min(queryDepth + 1, 6)
+      : queryDepth;
+
+    for (const variant of prioritizedVariants.slice(0, effectiveQueryDepth)) {
       queries.add(variant);
     }
   }
@@ -880,12 +884,32 @@ function getBroadKeywordLeadTerms(
   }
 
   const entityTypes = new Set(config.entity_type ?? []);
-  const terms: string[] = ["kontakt"];
+  const terms: string[] = [];
+  const healthLikeKeyword =
+    normalizedKeyword.includes("zdrow") ||
+    normalizedKeyword.includes("samolecz") ||
+    normalizedKeyword.includes("wellness") ||
+    normalizedKeyword.includes("terap") ||
+    normalizedKeyword.includes("rehabil");
+  const beautyLikeKeyword =
+    normalizedKeyword.includes("urod") ||
+    normalizedKeyword.includes("kosmet") ||
+    normalizedKeyword.includes("estety");
+
+  if (healthLikeKeyword) {
+    terms.push("terapia", "gabinet", "poradnia", "klinika", "centrum zdrowia");
+  }
+
+  if (beautyLikeKeyword) {
+    terms.push("gabinet", "salon", "kosmetologia", "medycyna estetyczna");
+  }
 
   if (
-    entityTypes.has("company") ||
-    entityTypes.has("person") ||
-    entityTypes.has("influencer")
+    !healthLikeKeyword &&
+    !beautyLikeKeyword &&
+    (entityTypes.has("company") ||
+      entityTypes.has("person") ||
+      entityTypes.has("influencer"))
   ) {
     terms.push("gabinet", "klinika", "salon");
   }
@@ -894,22 +918,14 @@ function getBroadKeywordLeadTerms(
     terms.push("sklep", "produkty");
   }
 
-  if (
-    normalizedKeyword.includes("zdrow") ||
-    normalizedKeyword.includes("samolecz") ||
-    normalizedKeyword.includes("wellness") ||
-    normalizedKeyword.includes("terap") ||
-    normalizedKeyword.includes("rehabil")
-  ) {
-    terms.push("poradnia", "centrum zdrowia", "terapia");
+  terms.push("kontakt");
+
+  if (healthLikeKeyword) {
+    terms.push("rehabilitacja");
   }
 
-  if (
-    normalizedKeyword.includes("urod") ||
-    normalizedKeyword.includes("kosmet") ||
-    normalizedKeyword.includes("estety")
-  ) {
-    terms.push("kosmetologia", "medycyna estetyczna", "zabieg");
+  if (beautyLikeKeyword) {
+    terms.push("zabieg");
   }
 
   if (normalizedKeyword.includes("mlm")) {
