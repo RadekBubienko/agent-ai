@@ -450,7 +450,12 @@ function buildQueries(config: TaskConfig): string[] {
   const queryDepth = getQueryDepthBySpeed(config.speed);
 
   for (const keyword of keywords) {
+    const broadKeywordLeadTerms = getBroadKeywordLeadTerms(keyword, config);
+    const broadKeyword = broadKeywordLeadTerms.length > 0;
     const variants = [
+      ...broadKeywordLeadTerms.map((term) =>
+        joinQueryParts(keyword, term, location),
+      ),
       joinQueryParts(keyword, location),
       ...strongIntentTerms.map((term) => joinQueryParts(keyword, term, location)),
       ...intentTerms.map((term) => joinQueryParts(keyword, term, location)),
@@ -459,7 +464,14 @@ function buildQueries(config: TaskConfig): string[] {
       .filter(Boolean)
       .filter((variant, index, all) => all.indexOf(variant) === index);
 
-    for (const variant of variants.slice(0, queryDepth)) {
+    const prioritizedVariants = broadKeyword
+      ? variants
+      : [
+          joinQueryParts(keyword, location),
+          ...variants.filter((variant) => variant !== joinQueryParts(keyword, location)),
+        ];
+
+    for (const variant of prioritizedVariants.slice(0, queryDepth)) {
       queries.add(variant);
     }
   }
@@ -855,6 +867,79 @@ function getBusinessModifiers(config: TaskConfig): string[] {
   }
 
   return [...new Set(modifiers)];
+}
+
+function getBroadKeywordLeadTerms(
+  keyword: string,
+  config: TaskConfig,
+): string[] {
+  const normalizedKeyword = normalizeSignalText(keyword);
+
+  if (!isBroadLeadKeyword(normalizedKeyword)) {
+    return [];
+  }
+
+  const entityTypes = new Set(config.entity_type ?? []);
+  const terms: string[] = ["kontakt"];
+
+  if (
+    entityTypes.has("company") ||
+    entityTypes.has("person") ||
+    entityTypes.has("influencer")
+  ) {
+    terms.push("gabinet", "klinika", "salon");
+  }
+
+  if (entityTypes.has("shop")) {
+    terms.push("sklep", "produkty");
+  }
+
+  if (
+    normalizedKeyword.includes("zdrow") ||
+    normalizedKeyword.includes("samolecz") ||
+    normalizedKeyword.includes("wellness") ||
+    normalizedKeyword.includes("terap") ||
+    normalizedKeyword.includes("rehabil")
+  ) {
+    terms.push("poradnia", "centrum zdrowia", "terapia");
+  }
+
+  if (
+    normalizedKeyword.includes("urod") ||
+    normalizedKeyword.includes("kosmet") ||
+    normalizedKeyword.includes("estety")
+  ) {
+    terms.push("kosmetologia", "medycyna estetyczna", "zabieg");
+  }
+
+  if (normalizedKeyword.includes("mlm")) {
+    terms.push("wellness", "dystrybutor");
+  }
+
+  return [...new Set(terms)];
+}
+
+function isBroadLeadKeyword(normalizedKeyword: string): boolean {
+  const broadKeywordPatterns = [
+    "zdrowie",
+    "uroda",
+    "wellness",
+    "samoleczenie",
+    "mlm",
+    "kosmetyka",
+    "kosmetologia",
+    "medycyna estetyczna",
+    "rehabilitacja",
+    "terapia",
+    "suplementy",
+    "odzywianie",
+    "detoks",
+    "fitness",
+  ];
+
+  return broadKeywordPatterns.some((pattern) =>
+    normalizedKeyword.includes(pattern),
+  );
 }
 
 function isAllowedSearchResult(url: string): boolean {
