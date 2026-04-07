@@ -884,6 +884,10 @@ function getCommentLeadReason(
     return "comment_page_engagement"
   }
 
+  if (scanEntirePage && commentSignal.normalizedText.length > 0) {
+    return "comment_on_owned_page"
+  }
+
   return null
 }
 
