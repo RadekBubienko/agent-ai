@@ -1,3 +1,4 @@
+import { createHash } from "crypto"
 import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent"
 import { saveLead } from "../saveLead"
 import { hasTimeBudgetExpired, markStoppedEarly } from "../runtime"
@@ -5,8 +6,6 @@ import { logTaskEvent } from "../taskLogs"
 
 const GRAPH_API_BASE_URL = "https://graph.facebook.com/v19.0"
 const GRAPH_API_TIMEOUT_MS = 8000
-const PAGE_ID = process.env.FACEBOOK_PAGE_ID
-const TOKEN = process.env.FACEBOOK_TOKEN
 
 const GENERAL_SIGNAL_MARKERS = [
   "zdrow",
@@ -191,6 +190,7 @@ export async function crawlFacebook(
 ) {
   console.log("Facebook owned page crawler started")
 
+  const token = getConfiguredFacebookToken()
   const settings = getOwnedPageSettings(config)
   const limit = config.limit || 50
   const normalizedKeywords = uniqueNormalizedStrings(
@@ -232,10 +232,11 @@ export async function crawlFacebook(
       includeReactions: settings.includeReactions,
       keywords: normalizedKeywords,
       limit,
+      tokenFingerprint: getTokenFingerprint(token),
     },
   })
 
-  if (!TOKEN) {
+  if (!token) {
     await logTaskEvent(taskId, "Facebook Owned Page: brak FACEBOOK_TOKEN", {
       level: "error",
     })
@@ -693,12 +694,14 @@ async function graphApiRequest<T>(
   path: string,
   params: Record<string, string | number | undefined>,
 ) {
-  if (!TOKEN) {
+  const token = getConfiguredFacebookToken()
+
+  if (!token) {
     throw new FacebookGraphApiError("Missing FACEBOOK_TOKEN")
   }
 
   const url = new URL(`${GRAPH_API_BASE_URL}/${path}`)
-  url.searchParams.set("access_token", TOKEN)
+  url.searchParams.set("access_token", token)
 
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === "") {
@@ -764,12 +767,28 @@ function getOwnedPageSettings(config: TaskConfig): OwnedPageSettings {
   const customPageId = config.facebook?.page_id?.trim()
 
   return {
-    pageId: customPageId || PAGE_ID || null,
+    pageId: customPageId || getConfiguredFacebookPageId() || null,
     daysBack: clampNumber(config.facebook?.days_back, 30, 1, 365),
     scanEntirePage: config.facebook?.scan_entire_page ?? true,
     includeComments: config.facebook?.include_comments ?? true,
     includeReactions: config.facebook?.include_reactions ?? true,
   }
+}
+
+function getConfiguredFacebookPageId() {
+  return process.env.FACEBOOK_PAGE_ID?.trim() || null
+}
+
+function getConfiguredFacebookToken() {
+  return process.env.FACEBOOK_TOKEN?.trim() || null
+}
+
+function getTokenFingerprint(token: string | null) {
+  if (!token) {
+    return null
+  }
+
+  return createHash("sha256").update(token).digest("hex").slice(0, 12)
 }
 
 function clampNumber(
