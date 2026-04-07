@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
 import type { DbClient, JobRunContext, TaskConfig } from "@/types/agent";
-import { crawlFacebookComments } from "./sources/facebook_comments";
 import { crawlFacebook } from "./sources/facebook";
 import { crawlGoogle } from "./sources/google";
 import { crawlInstagram } from "./sources/instagram";
@@ -19,7 +18,6 @@ const sourceRunners: Record<string, SourceRunner> = {
   google: crawlGoogle,
   instagram: crawlInstagram,
   facebook: crawlFacebook,
-  facebook_comments: crawlFacebookComments,
 };
 
 async function updateTaskStatus(
@@ -64,6 +62,19 @@ export async function startAgentJob(taskId: string, config: TaskConfig) {
         softRuntimeBudgetMs: SOFT_RUNTIME_BUDGET_MS,
       },
     });
+
+    const unsupportedSources = config.sources.filter(
+      (source) => !sourceRunners[source],
+    );
+
+    if (unsupportedSources.length > 0) {
+      await logTaskEvent(taskId, "Pominieto nieobslugiwane zrodla", {
+        level: "warn",
+        details: {
+          sources: unsupportedSources,
+        },
+      });
+    }
 
     const jobs = config.sources
       .map((source) => ({

@@ -51,7 +51,6 @@ export async function getAgentLeadsByFilters(
     `(
       source = 'agent'
       OR source = 'facebook'
-      OR source = 'facebook_comments'
       OR lead_type = 'agent'
       OR task_id IS NOT NULL
     )`,

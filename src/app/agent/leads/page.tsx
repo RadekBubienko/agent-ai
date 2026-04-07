@@ -105,10 +105,7 @@ function getLeadDisplay(lead: Lead) {
     emailText: lead.email ?? "-",
     websiteLabel: "Website",
     websiteCta: lead.website,
-    platformText:
-      lead.platform === "facebook_comments"
-        ? "Facebook / public comments"
-        : lead.platform ?? "-",
+    platformText: lead.platform ?? "-",
     sourceText: lead.source,
     accentClass: null,
   };
@@ -321,9 +318,6 @@ export default function AgentLeadsPage() {
                 <option value="">Wszystkie platformy</option>
                 <option value="search">Google / Search</option>
                 <option value="facebook">Facebook / Own Page</option>
-                <option value="facebook_comments">
-                  Facebook / public comments
-                </option>
                 <option value="instagram">Instagram</option>
               </select>
             </label>

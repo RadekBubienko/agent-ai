@@ -491,7 +491,6 @@ export default function AgentTaskForm() {
           {[
             "google",
             "facebook",
-            "facebook_comments",
             "linkedin",
             "instagram",
             "directories",
@@ -506,9 +505,7 @@ export default function AgentTaskForm() {
               />{" "}
               {src === "facebook"
                 ? "Facebook - Owned Page Hunter"
-                : src === "facebook_comments"
-                  ? "Facebook - Public Comment Scrape"
-                  : src}
+                : src}
             </label>
           ))}
 
@@ -626,32 +623,6 @@ export default function AgentTaskForm() {
                   Uwaga: dla Owned Page Huntera email zwykle nie jest dostepny.
                   Jesli zalezy Ci na kontaktach do rozmowy na Facebooku, rozważ
                   odznaczenie filtra &quot;wymagany email&quot;.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {form.sources.includes("facebook_comments") ? (
-            <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
-              <p className="text-sm font-medium text-sky-900">
-                Facebook - Public Comment Scrape
-              </p>
-              <p className="mt-1 text-sm text-sky-800">
-                Ten tryb przeszukuje publiczne wyniki postow po slowach
-                kluczowych i probuje wychwycic komentarze, w ktorych ktos jawnie
-                podal email, WWW albo numer telefonu.
-              </p>
-              <p className="mt-3 text-sm text-sky-800">
-                To nie jest skan Waszej strony. Ten crawler opiera sie na
-                publicznym scrape i moze wpasc w login lub consent wall
-                Facebooka, wiec jest mniej stabilny niz Owned Page Hunter.
-              </p>
-
-              {form.quality_filters.phone_required ? (
-                <p className="mt-3 text-sm text-amber-800">
-                  Filtr telefonu dziala tu heurystycznie na podstawie tresci
-                  komentarza. Sam numer nie jest zapisywany w leadzie, ale
-                  komentarz bez wykrytego telefonu zostanie odrzucony.
                 </p>
               ) : null}
             </div>
