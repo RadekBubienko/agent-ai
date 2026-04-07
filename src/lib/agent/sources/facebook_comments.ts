@@ -4,11 +4,13 @@ import { saveLead } from "../saveLead"
 import { hasTimeBudgetExpired, markStoppedEarly } from "../runtime"
 import { logTaskEvent } from "../taskLogs"
 import {
+  FACEBOOK_HEADERS,
   canonicalizeFacebookUrl,
   extractContactEvidenceFromHtml,
   extractDomain,
   fetchFacebookDocument,
   getFacebookInterRequestDelayMs,
+  isLikelyFacebookCandidateUrl,
   sleep,
 } from "./facebookCommon"
 
@@ -23,6 +25,7 @@ type FacebookCommentsStats = {
   keywordsProcessed: number
   searchesBlocked: number
   searchFailures: number
+  fallbackSearchesUsed: number
   postsFound: number
   postsScanned: number
   postsBlocked: number
@@ -36,6 +39,58 @@ type FacebookCommentsStats = {
   skippedExistingLead: number
   skippedRejectedLead: number
 }
+
+type SearchProvider = "duckduckgo" | "brave" | "bing"
+
+type SearchEndpoint = {
+  endpoint: string
+  provider: SearchProvider
+}
+
+type SearchAttemptDebug = {
+  endpoint: string
+  provider: SearchProvider
+  query: string
+  status?: number
+  htmlLength: number
+  candidates: number
+  title: string
+  preview: string
+  error?: string
+}
+
+type PostDiscoveryResult = {
+  postLinks: string[]
+  usedFallback: boolean
+  attempts: SearchAttemptDebug[]
+  mbasicOutcome?: {
+    kind: "error" | "empty"
+    blockedReason?: string
+    status?: number
+    finalUrl: string
+  }
+}
+
+const SEARCH_ENDPOINTS: SearchEndpoint[] = [
+  {
+    endpoint: "https://www.bing.com/search?cc=pl&setlang=pl&mkt=pl-PL&q=",
+    provider: "bing",
+  },
+  {
+    endpoint: "https://search.brave.com/search?source=web&q=",
+    provider: "brave",
+  },
+  {
+    endpoint: "https://html.duckduckgo.com/html/?q=",
+    provider: "duckduckgo",
+  },
+  {
+    endpoint: "https://lite.duckduckgo.com/lite/?q=",
+    provider: "duckduckgo",
+  },
+]
+
+const SEARCH_REQUEST_TIMEOUT_MS = 8000
 
 export async function crawlFacebookComments(
   db: DbClient,
@@ -52,6 +107,7 @@ export async function crawlFacebookComments(
     keywordsProcessed: 0,
     searchesBlocked: 0,
     searchFailures: 0,
+    fallbackSearchesUsed: 0,
     postsFound: 0,
     postsScanned: 0,
     postsBlocked: 0,
@@ -111,45 +167,63 @@ export async function crawlFacebookComments(
     try {
       await logTaskEvent(taskId, `Facebook Comments: wyszukiwanie "${keyword}"`)
 
-      const searchUrl =
-        "https://mbasic.facebook.com/search/posts/?q=" +
-        encodeURIComponent(keyword)
+      const discovery = await discoverFacebookCommentPosts(keyword, config)
 
-      const res = await fetchFacebookDocument(searchUrl)
-
-      if (!res.ok || !res.html) {
-        if (res.blockedReason === "consent_or_login") {
+      if (discovery.mbasicOutcome?.kind === "error") {
+        if (discovery.mbasicOutcome.blockedReason === "consent_or_login") {
           stats.searchesBlocked++
         } else {
           stats.searchFailures++
         }
+      }
 
+      if (discovery.mbasicOutcome) {
         await logTaskEvent(
           taskId,
-          "Facebook Comments: search niedostepny lub zablokowany",
+          discovery.mbasicOutcome.kind === "empty"
+            ? "Facebook Comments: mbasic search nie zwrocil postow, wlaczam fallback przez wyszukiwarki"
+            : discovery.usedFallback
+              ? "Facebook Comments: mbasic search niedostepny, wlaczam fallback przez wyszukiwarki"
+              : "Facebook Comments: search niedostepny lub zablokowany",
           {
             level: "warn",
             details: {
               keyword,
-              blockedReason: res.blockedReason,
-              status: res.status,
-              finalUrl: res.finalUrl,
+              blockedReason: discovery.mbasicOutcome.blockedReason,
+              status: discovery.mbasicOutcome.status,
+              finalUrl: discovery.mbasicOutcome.finalUrl,
             },
           },
         )
-        continue
       }
 
-      const html = res.html
-      const postLinks = extractPostLinks(html)
+      if (discovery.usedFallback) {
+        stats.fallbackSearchesUsed++
+      }
+
+      const postLinks = discovery.postLinks
       stats.postsFound += postLinks.length
 
       await logTaskEvent(taskId, "Facebook Comments: znalezione posty", {
         details: {
           keyword,
           posts: postLinks.length,
+          discoveryMethod: discovery.usedFallback ? "search_fallback" : "mbasic",
+          attempts: discovery.attempts.map((attempt) => ({
+            provider: attempt.provider,
+            query: attempt.query,
+            status: attempt.status,
+            candidates: attempt.candidates,
+            title: attempt.title,
+            preview: attempt.preview,
+            error: attempt.error,
+          })),
         },
       })
+
+      if (postLinks.length === 0) {
+        continue
+      }
 
       for (const postUrl of postLinks.slice(0, getMaxPostsPerKeyword(config.speed))) {
         if (leadsSaved >= limit) {
@@ -312,6 +386,47 @@ export async function crawlFacebookComments(
   return leadsSaved
 }
 
+async function discoverFacebookCommentPosts(
+  keyword: string,
+  config: TaskConfig,
+): Promise<PostDiscoveryResult> {
+  const searchUrl =
+    "https://mbasic.facebook.com/search/posts/?q=" +
+    encodeURIComponent(keyword)
+  const res = await fetchFacebookDocument(searchUrl)
+
+  if (res.ok && res.html) {
+    const directLinks = extractPostLinks(res.html)
+
+    if (directLinks.length > 0) {
+      return {
+        postLinks: directLinks,
+        usedFallback: false,
+        attempts: [],
+      }
+    }
+  }
+
+  const fallback = await discoverFacebookPostsBySearch(keyword, config)
+
+  return {
+    ...fallback,
+    usedFallback: true,
+    mbasicOutcome: res.ok && res.html
+      ? {
+          kind: "empty",
+          status: res.status,
+          finalUrl: res.finalUrl,
+        }
+      : {
+          kind: "error",
+          blockedReason: res.blockedReason,
+          status: res.status,
+          finalUrl: res.finalUrl,
+        },
+  }
+}
+
 function extractPostLinks(html: string) {
   const $ = cheerio.load(html)
   const seen = new Set<string>()
@@ -338,6 +453,95 @@ function extractPostLinks(html: string) {
   return links
 }
 
+async function discoverFacebookPostsBySearch(
+  keyword: string,
+  config: TaskConfig,
+) {
+  const attempts: SearchAttemptDebug[] = []
+  const candidates: string[] = []
+  const seen = new Set<string>()
+  const queries = buildFacebookCommentSearchQueries(keyword, config)
+  const maxCandidates = getMaxSearchFallbackCandidates(config.speed)
+
+  for (const query of queries) {
+    for (const { endpoint, provider } of SEARCH_ENDPOINTS) {
+      try {
+        const url = endpoint + encodeURIComponent(query)
+        const res = await fetch(url, {
+          headers: FACEBOOK_HEADERS,
+          cache: "no-store",
+          redirect: "follow",
+          signal: AbortSignal.timeout(SEARCH_REQUEST_TIMEOUT_MS),
+        })
+        const html = await res.text()
+        const parsedCandidates = extractSearchCandidates(html, provider)
+          .filter((candidate) => isLikelyFacebookPostUrl(candidate))
+          .slice(0, maxCandidates)
+        const $ = cheerio.load(html)
+
+        attempts.push({
+          endpoint,
+          provider,
+          query,
+          status: res.status,
+          htmlLength: html.length,
+          candidates: parsedCandidates.length,
+          title: $("title").text().trim(),
+          preview: $("body")
+            .text()
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 240),
+        })
+
+        for (const candidate of parsedCandidates) {
+          const fingerprint = canonicalizeFacebookUrl(candidate)
+
+          if (seen.has(fingerprint)) {
+            continue
+          }
+
+          seen.add(fingerprint)
+          candidates.push(candidate)
+
+          if (candidates.length >= maxCandidates) {
+            return {
+              postLinks: candidates,
+              usedFallback: true,
+              attempts,
+            }
+          }
+        }
+
+        if (parsedCandidates.length > 0 && candidates.length > 0) {
+          return {
+            postLinks: candidates,
+            usedFallback: true,
+            attempts,
+          }
+        }
+      } catch (error) {
+        attempts.push({
+          endpoint,
+          provider,
+          query,
+          htmlLength: 0,
+          candidates: 0,
+          title: "",
+          preview: "",
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  return {
+    postLinks: candidates,
+    usedFallback: true,
+    attempts,
+  }
+}
+
 function normalizePostUrl(href?: string | null) {
   if (!href) {
     return null
@@ -356,6 +560,227 @@ function normalizePostUrl(href?: string | null) {
   } catch {
     return null
   }
+}
+
+function extractSearchCandidates(
+  html: string,
+  provider: SearchProvider,
+): string[] {
+  if (provider === "bing") {
+    return extractBingCandidates(html)
+  }
+
+  if (provider === "brave") {
+    return extractBraveCandidates(html)
+  }
+
+  return extractDuckDuckGoCandidates(html)
+}
+
+function extractDuckDuckGoCandidates(html: string) {
+  const $ = cheerio.load(html)
+  const candidates: string[] = []
+
+  $(".result, .results_links, .web-result, .links_main").each((_, el) => {
+    const anchor = $(el).find("a.result__a, a.result-link, a").first()
+    const href = anchor.attr("href")
+    const normalized = normalizeSearchLink(href)
+
+    if (normalized) {
+      candidates.push(normalized)
+    }
+  })
+
+  if (candidates.length > 0) {
+    return [...new Set(candidates)]
+  }
+
+  $("a").each((_, el) => {
+    const href = $(el).attr("href")
+    const normalized = normalizeSearchLink(href)
+
+    if (normalized) {
+      candidates.push(normalized)
+    }
+  })
+
+  return [...new Set(candidates)]
+}
+
+function extractBingCandidates(html: string) {
+  const $ = cheerio.load(html)
+  const candidates: string[] = []
+
+  $("li.b_algo").each((_, el) => {
+    const anchor = $(el).find("h2 a").first()
+    const href = anchor.attr("href")
+    const normalized = normalizeSearchLink(href)
+
+    if (normalized) {
+      candidates.push(normalized)
+    }
+  })
+
+  return [...new Set(candidates)]
+}
+
+function extractBraveCandidates(html: string) {
+  const $ = cheerio.load(html)
+  const candidates: string[] = []
+
+  $("a").each((_, el) => {
+    const href = $(el).attr("href")
+    const normalized = normalizeSearchLink(href)
+    const title = $(el).text().replace(/\s+/g, " ").trim()
+
+    if (!normalized || !title || title.length < 3) {
+      return
+    }
+
+    candidates.push(normalized)
+  })
+
+  return [...new Set(candidates)]
+}
+
+function normalizeSearchLink(href?: string | null): string | null {
+  if (!href) {
+    return null
+  }
+
+  try {
+    if (href.startsWith("//duckduckgo.com/l/?uddg=")) {
+      const url = new URL("https:" + href)
+      return url.searchParams.get("uddg")
+    }
+
+    if (href.startsWith("/l/?uddg=")) {
+      const url = new URL("https://duckduckgo.com" + href)
+      return url.searchParams.get("uddg")
+    }
+
+    if (href.startsWith("http")) {
+      if (href.includes("bing.com/ck/a")) {
+        const url = new URL(href)
+        const encodedTarget = url.searchParams.get("u")
+        return decodeBingTarget(encodedTarget)
+      }
+
+      return href
+    }
+
+    if (href.startsWith("//")) {
+      return "https:" + href
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function decodeBingTarget(encodedTarget?: string | null): string | null {
+  if (!encodedTarget) {
+    return null
+  }
+
+  try {
+    const payload = encodedTarget.startsWith("a1")
+      ? encodedTarget.slice(2)
+      : encodedTarget
+    const decoded = Buffer.from(payload, "base64").toString("utf8")
+
+    return decoded || null
+  } catch {
+    return null
+  }
+}
+
+function buildFacebookCommentSearchQueries(
+  keyword: string,
+  config: TaskConfig,
+) {
+  const location = getSearchLocation(config)
+  const queries = [
+    joinQueryParts("site:facebook.com", keyword, location, "posts"),
+    joinQueryParts("site:facebook.com", keyword, location, "permalink.php"),
+    joinQueryParts("site:facebook.com", keyword, location, "story_fbid"),
+    joinQueryParts("site:facebook.com", keyword, location, "comment_id"),
+  ].filter(Boolean)
+
+  if (config.speed === "fast") {
+    return queries.slice(0, 1)
+  }
+
+  if (config.speed === "slow") {
+    return queries.slice(0, 4)
+  }
+
+  return queries.slice(0, 3)
+}
+
+function getSearchLocation(config: TaskConfig) {
+  const city = config.geo?.city?.trim()
+  const region = config.geo?.region?.trim()
+  const country = config.geo?.country?.trim()
+
+  if (city) {
+    return city
+  }
+
+  if (region) {
+    return region
+  }
+
+  if (country?.toUpperCase() === "PL") {
+    return "Polska"
+  }
+
+  return country || ""
+}
+
+function joinQueryParts(...parts: Array<string | undefined | null>) {
+  return parts
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function isLikelyFacebookPostUrl(url: string) {
+  if (!isLikelyFacebookCandidateUrl(url)) {
+    return false
+  }
+
+  try {
+    const parsed = new URL(url)
+    const path = parsed.pathname.toLowerCase()
+
+    if (
+      path.includes("/posts/") ||
+      path.includes("/permalink.php") ||
+      path.includes("/story.php")
+    ) {
+      return true
+    }
+
+    return parsed.searchParams.has("story_fbid")
+  } catch {
+    return false
+  }
+}
+
+function getMaxSearchFallbackCandidates(speed?: string) {
+  if (speed === "fast") {
+    return 3
+  }
+
+  if (speed === "slow") {
+    return 8
+  }
+
+  return 5
 }
 
 function extractCommentLeadCandidates(
