@@ -55,6 +55,21 @@ const STRONG_INTENT_MARKERS = [
   "czy ktos",
 ]
 
+const LIGHT_ENGAGEMENT_MARKERS = [
+  "poprosze",
+  "prosze",
+  "pw",
+  "priv",
+  "dm",
+  "link",
+  "info",
+  "szczegoly",
+  "cena",
+  "gdzie",
+  "jak",
+  "ile",
+]
+
 type GraphApiEdge<T> = {
   data: T[]
   paging?: {
@@ -846,6 +861,10 @@ function getCommentLeadReason(
     return "comment_question_signal"
   }
 
+  if (scanEntirePage && isMeaningfulEngagementComment(commentSignal.normalizedText)) {
+    return "comment_page_engagement"
+  }
+
   return null
 }
 
@@ -862,6 +881,10 @@ function getReactionLeadReason(
     (postSignal.strongIntent || postSignal.generalSignalCount >= 3)
   ) {
     return "reaction_on_high_intent_post"
+  }
+
+  if (scanEntirePage) {
+    return "reaction_on_owned_page"
   }
 
   return null
@@ -912,6 +935,28 @@ function normalizeSignalText(text: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim()
+}
+
+function isMeaningfulEngagementComment(text: string) {
+  if (!text) {
+    return false
+  }
+
+  const withoutLinks = text
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/www\.\S+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  if (!withoutLinks) {
+    return false
+  }
+
+  if (LIGHT_ENGAGEMENT_MARKERS.some((marker) => withoutLinks.includes(marker))) {
+    return true
+  }
+
+  return withoutLinks.length >= 4
 }
 
 function uniqueNormalizedStrings(items: string[]) {
