@@ -64,6 +64,53 @@ function normalizeWebsiteUrl(website: string | null): string | null {
   return `https://${website}`;
 }
 
+function isAnonymousFacebookCommentLead(lead: Lead): boolean {
+  if (lead.platform !== "facebook" || !lead.website) {
+    return false;
+  }
+
+  const normalizedName = lead.name.toLowerCase();
+
+  return (
+    normalizedName.startsWith("facebook comment signal #") &&
+    (lead.website.includes("comment_id=") || lead.website.includes("/comment/"))
+  );
+}
+
+function getAnonymousCommentShortId(name: string): string {
+  const match = name.match(/#([a-z0-9]+)$/i);
+
+  return match?.[1] ?? "signal";
+}
+
+function getLeadDisplay(lead: Lead) {
+  if (isAnonymousFacebookCommentLead(lead)) {
+    const shortId = getAnonymousCommentShortId(lead.name);
+
+    return {
+      title: `Facebook - komentarz #${shortId}`,
+      subtitle: "Autor komentarza ukryty przez API Facebooka",
+      emailText: "Brak danych autora z API",
+      websiteLabel: "Komentarz",
+      websiteCta: "Otworz komentarz",
+      platformText: "Facebook / komentarz",
+      sourceText: "agent",
+      accentClass: "bg-sky-50 text-sky-700",
+    };
+  }
+
+  return {
+    title: lead.name,
+    subtitle: null,
+    emailText: lead.email ?? "-",
+    websiteLabel: "Website",
+    websiteCta: lead.website,
+    platformText: lead.platform ?? "-",
+    sourceText: lead.source,
+    accentClass: null,
+  };
+}
+
 async function requestAgentLeads(filters: {
   platform: string;
   segment: string;
@@ -351,98 +398,114 @@ export default function AgentLeadsPage() {
       ) : null}
 
       <div className="space-y-4 lg:hidden">
-        {leads.map((lead) => (
-          <article
-            key={lead.id}
-            className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
-          >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">
-                  {lead.name}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {formatPolishDateTime(lead.created_at)}
-                </p>
-              </div>
+        {leads.map((lead) => {
+          const display = getLeadDisplay(lead);
 
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-medium ${statusClasses(lead.status)}`}
-              >
-                {lead.status}
-              </span>
-            </div>
-
-            <div className="space-y-3 text-sm text-gray-700">
-              <div>
-                <p className="text-gray-500">Email</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <p className="break-all">{lead.email ?? "-"}</p>
-                  {lead.email ? (
-                    <button
-                      type="button"
-                      onClick={() => void copyEmail(lead)}
-                      className="ui-pressable rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700"
-                    >
-                      {copiedLeadId === lead.id ? "Skopiowano" : "Kopiuj"}
-                    </button>
+          return (
+            <article
+              key={lead.id}
+              className="ui-panel rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">
+                    {display.title}
+                  </h2>
+                  {display.subtitle ? (
+                    <p className="mt-1 text-sm text-sky-700">
+                      {display.subtitle}
+                    </p>
                   ) : null}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-gray-500">Website</p>
-                {lead.website ? (
-                  <a
-                    href={normalizeWebsiteUrl(lead.website) ?? "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 inline-flex break-all text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition hover:text-emerald-800"
-                  >
-                    {lead.website}
-                  </a>
-                ) : (
-                  <p className="mt-1 break-all">-</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-gray-50 p-3">
-                  <p className="text-gray-500">Platforma / source</p>
-                  <p className="mt-1 font-medium text-gray-900">
-                    {lead.platform ?? "-"} / {lead.source}
+                  <p className="mt-1 text-sm text-gray-500">
+                    {formatPolishDateTime(lead.created_at)}
                   </p>
                 </div>
 
-                <div className="rounded-2xl bg-gray-50 p-3">
-                  <p className="text-gray-500">Score</p>
-                  <p className="mt-1 font-medium text-gray-900">
-                    {lead.total_score}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2 pt-1">
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${segmentClasses(lead.segment)}`}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${statusClasses(lead.status)}`}
                 >
-                  {lead.segment}
+                  {lead.status}
                 </span>
               </div>
 
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => void rejectLead(lead)}
-                  disabled={rejectingLeadId === lead.id}
-                  className="inline-flex rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {rejectingLeadId === lead.id ? "Odrzucanie..." : "Odrzuc"}
-                </button>
+              <div className="space-y-3 text-sm text-gray-700">
+                <div>
+                  <p className="text-gray-500">Email</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <p className="break-all">{display.emailText}</p>
+                    {lead.email ? (
+                      <button
+                        type="button"
+                        onClick={() => void copyEmail(lead)}
+                        className="ui-pressable rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700"
+                      >
+                        {copiedLeadId === lead.id ? "Skopiowano" : "Kopiuj"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-gray-500">{display.websiteLabel}</p>
+                  {lead.website ? (
+                    <a
+                      href={normalizeWebsiteUrl(lead.website) ?? "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-flex break-all text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition hover:text-emerald-800"
+                    >
+                      {display.websiteCta}
+                    </a>
+                  ) : (
+                    <p className="mt-1 break-all">-</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-gray-50 p-3">
+                    <p className="text-gray-500">Platforma / source</p>
+                    <p className="mt-1 font-medium text-gray-900">
+                      {display.platformText} / {display.sourceText}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-gray-50 p-3">
+                    <p className="text-gray-500">Score</p>
+                    <p className="mt-1 font-medium text-gray-900">
+                      {lead.total_score}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${segmentClasses(lead.segment)}`}
+                  >
+                    {lead.segment}
+                  </span>
+                  {display.accentClass ? (
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${display.accentClass}`}
+                    >
+                      Sygnal komentarza
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void rejectLead(lead)}
+                    disabled={rejectingLeadId === lead.id}
+                    className="inline-flex rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {rejectingLeadId === lead.id ? "Odrzucanie..." : "Odrzuc"}
+                  </button>
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
 
         {!isLoading && leads.length === 0 ? (
           <div className="ui-panel rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
@@ -469,79 +532,105 @@ export default function AgentLeadsPage() {
 
             <tbody className="divide-y divide-gray-100">
               {leads.map((lead) => (
-                <tr key={lead.id} className="align-top">
-                  <td className="px-5 py-4 text-sm font-medium text-gray-900">
-                    <div className="break-words">{lead.name}</div>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="break-all">{lead.email ?? "-"}</div>
-                        {lead.email ? (
-                          <button
-                            type="button"
-                            onClick={() => void copyEmail(lead)}
-                            className="ui-pressable rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700"
-                          >
-                            {copiedLeadId === lead.id ? "Skopiowano" : "Kopiuj"}
-                          </button>
+                (() => {
+                  const display = getLeadDisplay(lead);
+
+                  return (
+                    <tr key={lead.id} className="align-top">
+                      <td className="px-5 py-4 text-sm font-medium text-gray-900">
+                        <div className="break-words">{display.title}</div>
+                        {display.subtitle ? (
+                          <div className="mt-1 text-xs text-sky-700">
+                            {display.subtitle}
+                          </div>
                         ) : null}
-                      </div>
-                      <div className="break-all text-gray-500">
-                        {lead.website ? (
-                          <a
-                            href={normalizeWebsiteUrl(lead.website) ?? "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition hover:text-emerald-800"
+                      </td>
+                      <td className="px-5 py-4 text-sm text-gray-700">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="break-all">{display.emailText}</div>
+                            {lead.email ? (
+                              <button
+                                type="button"
+                                onClick={() => void copyEmail(lead)}
+                                className="ui-pressable rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700"
+                              >
+                                {copiedLeadId === lead.id
+                                  ? "Skopiowano"
+                                  : "Kopiuj"}
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="break-all text-gray-500">
+                            {lead.website ? (
+                              <a
+                                href={normalizeWebsiteUrl(lead.website) ?? "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition hover:text-emerald-800"
+                              >
+                                {display.websiteCta}
+                              </a>
+                            ) : (
+                              "-"
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-gray-700">
+                        <div className="space-y-1 break-words">
+                          <div className="font-medium text-gray-900">
+                            {display.platformText}
+                          </div>
+                          <div className="text-gray-500">
+                            {display.sourceText}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-sm font-semibold text-gray-900">
+                        {lead.total_score}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-medium ${segmentClasses(lead.segment)}`}
                           >
-                            {lead.website}
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
-                    <div className="space-y-1 break-words">
-                      <div className="font-medium text-gray-900">
-                        {lead.platform ?? "-"}
-                      </div>
-                      <div className="text-gray-500">{lead.source}</div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-gray-900">
-                    {lead.total_score}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${segmentClasses(lead.segment)}`}
-                    >
-                      {lead.segment}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">
-                    {formatPolishDateTime(lead.created_at)}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${statusClasses(lead.status)}`}
-                    >
-                      {lead.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <button
-                      type="button"
-                      onClick={() => void rejectLead(lead)}
-                      disabled={rejectingLeadId === lead.id}
-                      className="inline-flex rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {rejectingLeadId === lead.id ? "Odrzucanie..." : "Odrzuc"}
-                    </button>
-                  </td>
-                </tr>
+                            {lead.segment}
+                          </span>
+                          {display.accentClass ? (
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-medium ${display.accentClass}`}
+                            >
+                              Komentarz
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-gray-700">
+                        {formatPolishDateTime(lead.created_at)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-medium ${statusClasses(lead.status)}`}
+                        >
+                          {lead.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <button
+                          type="button"
+                          onClick={() => void rejectLead(lead)}
+                          disabled={rejectingLeadId === lead.id}
+                          className="inline-flex rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {rejectingLeadId === lead.id
+                            ? "Odrzucanie..."
+                            : "Odrzuc"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })()
               ))}
 
               {!isLoading && leads.length === 0 ? (
