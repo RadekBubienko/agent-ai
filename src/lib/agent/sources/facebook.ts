@@ -157,6 +157,9 @@ type OwnedPageStats = {
   postsSkippedTooOld: number
   postsSkippedNoSignal: number
   commentsFetched: number
+  commentsSkippedMissingActor: number
+  commentsSkippedOwnPage: number
+  commentsSkippedNoReason: number
   reactionsFetched: number
   commentCandidatesMatched: number
   reactionCandidatesMatched: number
@@ -210,6 +213,9 @@ export async function crawlFacebook(
     postsSkippedTooOld: 0,
     postsSkippedNoSignal: 0,
     commentsFetched: 0,
+    commentsSkippedMissingActor: 0,
+    commentsSkippedOwnPage: 0,
+    commentsSkippedNoReason: 0,
     reactionsFetched: 0,
     commentCandidatesMatched: 0,
     reactionCandidatesMatched: 0,
@@ -418,10 +424,12 @@ export async function crawlFacebook(
           }
 
           if (!comment.from?.id || !comment.from.name) {
+            stats.commentsSkippedMissingActor++
             continue
           }
 
           if (comment.from.id === settings.pageId) {
+            stats.commentsSkippedOwnPage++
             continue
           }
 
@@ -438,6 +446,7 @@ export async function crawlFacebook(
           )
 
           if (!reason) {
+            stats.commentsSkippedNoReason++
             continue
           }
 
@@ -884,7 +893,7 @@ function getCommentLeadReason(
     return "comment_page_engagement"
   }
 
-  if (scanEntirePage && commentSignal.normalizedText.length > 0) {
+  if (scanEntirePage) {
     return "comment_on_owned_page"
   }
 
