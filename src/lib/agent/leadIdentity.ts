@@ -62,9 +62,19 @@ function extractDomainFromEmail(email?: string | null): string | null {
 function normalizeFacebookIdentity(url: URL): string {
   const pathname = normalizeSocialPath(url.pathname);
   const profileId = url.searchParams.get("id")?.trim();
+  const commentId = url.searchParams.get("comment_id")?.trim();
+  const replyCommentId = url.searchParams.get("reply_comment_id")?.trim();
 
   if (pathname === "/profile.php" && profileId) {
     return `facebook.com/profile.php?id=${profileId}`;
+  }
+
+  if (commentId) {
+    if (replyCommentId) {
+      return `facebook.com/comment/${commentId}/reply/${replyCommentId}`;
+    }
+
+    return `facebook.com/comment/${commentId}`;
   }
 
   if (pathname && pathname !== "/") {

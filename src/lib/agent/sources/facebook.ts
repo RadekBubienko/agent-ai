@@ -160,6 +160,8 @@ type OwnedPageStats = {
   commentsSkippedMissingActor: number
   commentsSkippedOwnPage: number
   commentsSkippedNoReason: number
+  anonymousCommentCandidatesMatched: number
+  savedFromAnonymousComments: number
   reactionsFetched: number
   commentCandidatesMatched: number
   reactionCandidatesMatched: number
@@ -216,6 +218,8 @@ export async function crawlFacebook(
     commentsSkippedMissingActor: 0,
     commentsSkippedOwnPage: 0,
     commentsSkippedNoReason: 0,
+    anonymousCommentCandidatesMatched: 0,
+    savedFromAnonymousComments: 0,
     reactionsFetched: 0,
     commentCandidatesMatched: 0,
     reactionCandidatesMatched: 0,
@@ -425,6 +429,38 @@ export async function crawlFacebook(
 
           if (!comment.from?.id || !comment.from.name) {
             stats.commentsSkippedMissingActor++
+
+            const anonymousReason = getAnonymousCommentLeadReason(
+              comment.message ?? "",
+              effectiveScanEntirePage,
+            )
+
+            if (!anonymousReason) {
+              continue
+            }
+
+            stats.anonymousCommentCandidatesMatched++
+
+            const saved = await saveOwnedPageAnonymousCommentLead(
+              db,
+              taskId,
+              {
+                commentId: comment.id,
+                reason: anonymousReason,
+                commentUrl: buildFacebookCommentUrl(comment, post),
+                postUrl: post.permalink_url ?? null,
+                postId: post.id,
+                preview: previewText(comment.message),
+                signalKeywords: [...postSignal.keywordMatches],
+              },
+              stats,
+            )
+
+            if (saved) {
+              leadsSaved++
+              stats.savedFromAnonymousComments++
+            }
+
             continue
           }
 
@@ -643,6 +679,61 @@ async function saveOwnedPageLead(
         keywords: input.signalKeywords,
       },
     })
+
+    return true
+  }
+
+  if (result.reason === "duplicate") {
+    stats.skippedExistingLead++
+  } else if (result.reason === "rejected") {
+    stats.skippedRejectedLead++
+  }
+
+  return false
+}
+
+async function saveOwnedPageAnonymousCommentLead(
+  db: DbClient,
+  taskId: string,
+  input: {
+    commentId: string
+    reason: string
+    commentUrl: string
+    postUrl: string | null
+    postId: string
+    preview: string | null
+    signalKeywords: string[]
+  },
+  stats: OwnedPageStats,
+) {
+  const shortCommentId = input.commentId.slice(-8)
+  const lead = {
+    name: `Facebook comment signal #${shortCommentId}`,
+    website: input.commentUrl,
+    source: "agent",
+    platform: "facebook",
+    email: null,
+  }
+
+  const result = await saveLead(db, lead, { taskId })
+
+  if (result.created) {
+    await logTaskEvent(
+      taskId,
+      `Facebook Owned Page: zapisano anonimowy sygnal komentarza ${shortCommentId}`,
+      {
+        level: "success",
+        details: {
+          commentId: input.commentId,
+          commentUrl: input.commentUrl,
+          reason: input.reason,
+          postId: input.postId,
+          postUrl: input.postUrl,
+          preview: input.preview,
+          keywords: input.signalKeywords,
+        },
+      },
+    )
 
     return true
   }
@@ -940,6 +1031,20 @@ function buildFacebookProfileUrl(actorId: string) {
   return `https://www.facebook.com/profile.php?id=${encodeURIComponent(actorId)}`
 }
 
+function buildFacebookCommentUrl(comment: FacebookComment, post: FacebookPost) {
+  if (comment.permalink_url) {
+    return comment.permalink_url
+  }
+
+  const [pageId, storyId] = post.id.split("_")
+
+  if (pageId && storyId) {
+    return `https://www.facebook.com/permalink.php?story_fbid=${encodeURIComponent(storyId)}&id=${encodeURIComponent(pageId)}&comment_id=${encodeURIComponent(comment.id)}`
+  }
+
+  return `https://www.facebook.com/comment/${encodeURIComponent(comment.id)}`
+}
+
 function previewText(text?: string | null, maxLength = 140) {
   if (!text) {
     return null
@@ -989,6 +1094,25 @@ function isMeaningfulEngagementComment(text: string) {
   }
 
   return withoutLinks.length >= 4
+}
+
+function getAnonymousCommentLeadReason(
+  text: string,
+  scanEntirePage: boolean,
+) {
+  const normalizedText = normalizeSignalText(text)
+
+  if (!normalizedText) {
+    return null
+  }
+
+  if (scanEntirePage) {
+    return "anonymous_comment_on_owned_page"
+  }
+
+  return isMeaningfulEngagementComment(normalizedText)
+    ? "anonymous_comment_signal"
+    : null
 }
 
 function uniqueNormalizedStrings(items: string[]) {
