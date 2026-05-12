@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2/promise";
 import { db } from "@/lib/db";
+import { ensureLeadOriginColumn, type LeadOrigin } from "@/lib/leads/leadOrigin";
 
 type LeadRow = RowDataPacket & {
   id: number;
@@ -11,6 +12,7 @@ type LeadRow = RowDataPacket & {
   status: string | null;
   segment: string | null;
   total_score: number | null;
+  lead_origin: LeadOrigin | null;
 };
 
 type CountRow = RowDataPacket & {
@@ -65,6 +67,18 @@ function parseSort(value: string | null): "newest" | "oldest" {
   return value === "oldest" ? "oldest" : "newest";
 }
 
+function parseOrigin(value: string | null): LeadOrigin | "all" {
+  if (value === "all") {
+    return "all";
+  }
+
+  if (value === "agent" || value === "manual") {
+    return value;
+  }
+
+  return "landing_page";
+}
+
 export async function GET(req: NextRequest) {
   const token = req.headers.get("authorization");
 
@@ -73,17 +87,28 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    await ensureLeadOriginColumn();
+
     const searchParams = req.nextUrl.searchParams;
     const page = parsePage(searchParams.get("page"));
     const pageSize = parsePageSize(searchParams.get("pageSize"));
     const sort = parseSort(searchParams.get("sort"));
+    const origin = parseOrigin(searchParams.get("origin"));
     const search = searchParams.get("search")?.trim() ?? "";
     const status = searchParams.get("status")?.trim() ?? "";
     const from = searchParams.get("from")?.trim() ?? "";
     const to = searchParams.get("to")?.trim() ?? "";
 
-    const whereClauses: string[] = [];
-    const values: Array<string | number> = [];
+    const datasetWhereClauses: string[] = [];
+    const datasetValues: Array<string | number> = [];
+
+    if (origin !== "all") {
+      datasetWhereClauses.push("lead_origin = ?");
+      datasetValues.push(origin);
+    }
+
+    const whereClauses: string[] = [...datasetWhereClauses];
+    const values: Array<string | number> = [...datasetValues];
 
     if (search) {
       const like = `%${search}%`;
@@ -108,6 +133,10 @@ export async function GET(req: NextRequest) {
 
     const whereSql =
       whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+    const datasetWhereSql =
+      datasetWhereClauses.length > 0
+        ? `WHERE ${datasetWhereClauses.join(" AND ")}`
+        : "";
     const orderDirection = sort === "oldest" ? "ASC" : "DESC";
 
     const [totalRows] = await db.query<CountRow[]>(
@@ -122,7 +151,7 @@ export async function GET(req: NextRequest) {
 
     const leadValues = [...values];
     let leadQuery = `
-      SELECT id, name, email, created_at, ip_address, status, segment, total_score
+      SELECT id, name, email, created_at, ip_address, status, segment, total_score, lead_origin
       FROM leads
       ${whereSql}
       ORDER BY created_at ${orderDirection}, id ${orderDirection}
@@ -135,55 +164,76 @@ export async function GET(req: NextRequest) {
 
     const [leads] = await db.query<LeadRow[]>(leadQuery, leadValues);
 
-    const [stats] = await db.query<StatRow[]>(`
+    const [stats] = await db.query<StatRow[]>(
+      `
       SELECT day, count
       FROM (
         SELECT
           DATE_FORMAT(DATE(created_at), '%Y-%m-%d') AS day,
           COUNT(*) AS count
         FROM leads
+        ${datasetWhereSql}
         GROUP BY DATE(created_at)
         ORDER BY DATE(created_at) DESC
         LIMIT 14
       ) recent_days
       ORDER BY day ASC
-    `);
+      `,
+      datasetValues,
+    );
 
-    const [statusStats] = await db.query<StatusStatRow[]>(`
+    const [statusStats] = await db.query<StatusStatRow[]>(
+      `
       SELECT COALESCE(status, 'new') AS status, COUNT(*) AS count
       FROM leads
+      ${datasetWhereSql}
       GROUP BY COALESCE(status, 'new')
       ORDER BY count DESC
-    `);
+      `,
+      datasetValues,
+    );
 
-    const [segmentStats] = await db.query<SegmentStatRow[]>(`
+    const [segmentStats] = await db.query<SegmentStatRow[]>(
+      `
       SELECT COALESCE(segment, 'unknown') AS segment, COUNT(*) AS count
       FROM leads
+      ${datasetWhereSql}
       GROUP BY COALESCE(segment, 'unknown')
       ORDER BY count DESC
-    `);
+      `,
+      datasetValues,
+    );
 
-    const [ipStats] = await db.query<IpStatRow[]>(`
+    const [ipStats] = await db.query<IpStatRow[]>(
+      `
       SELECT ip_address, COUNT(*) AS count
       FROM leads
-      WHERE ip_address IS NOT NULL AND ip_address <> ''
+      ${datasetWhereSql ? `${datasetWhereSql} AND` : "WHERE"} ip_address IS NOT NULL AND ip_address <> ''
       GROUP BY ip_address
       HAVING COUNT(*) > 1
       ORDER BY count DESC, ip_address ASC
       LIMIT 10
-    `);
+      `,
+      datasetValues,
+    );
 
-    const [todayRows] = await db.query<CountRow[]>(`
+    const [todayRows] = await db.query<CountRow[]>(
+      `
       SELECT COUNT(*) AS count
       FROM leads
-      WHERE DATE(created_at) = CURDATE()
-    `);
+      ${datasetWhereSql ? `${datasetWhereSql} AND` : "WHERE"} DATE(created_at) = CURDATE()
+      `,
+      datasetValues,
+    );
 
-    const [followUpRows] = await db.query<CountRow[]>(`
+    const [followUpRows] = await db.query<CountRow[]>(
+      `
       SELECT COUNT(*) AS count
       FROM leads
-      WHERE status = 'contacted' AND DATE(contacted_at) = CURDATE()
-    `);
+      ${datasetWhereSql ? `${datasetWhereSql} AND` : "WHERE"} status = 'contacted' AND DATE(contacted_at) = CURDATE()
+      `,
+      datasetValues,
+    );
 
     return NextResponse.json({
       leads,
@@ -193,6 +243,7 @@ export async function GET(req: NextRequest) {
       totalPages,
       pageSize,
       sort,
+      origin,
       statusStats,
       todayNew: Number(todayRows[0]?.count ?? 0),
       toFollowUp: Number(followUpRows[0]?.count ?? 0),

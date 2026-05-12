@@ -123,6 +123,11 @@ export default function AgentTaskForm() {
       include_comments: true,
       include_reactions: true,
     },
+    instagram: {
+      page_id: "",
+      days_back: 30,
+      include_comments: true,
+    },
     limit: 200,
     speed: "slow",
   });
@@ -505,6 +510,8 @@ export default function AgentTaskForm() {
               />{" "}
               {src === "facebook"
                 ? "Facebook - Owned Page Hunter"
+                : src === "instagram"
+                  ? "Instagram - Owned Account Hunter"
                 : src}
             </label>
           ))}
@@ -623,6 +630,96 @@ export default function AgentTaskForm() {
                   Uwaga: dla Owned Page Huntera email zwykle nie jest dostepny.
                   Jesli zalezy Ci na kontaktach do rozmowy na Facebooku, rozważ
                   odznaczenie filtra &quot;wymagany email&quot;.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {form.sources.includes("instagram") ? (
+            <div className="rounded-lg border border-fuchsia-200 bg-fuchsia-50 p-4">
+              <p className="text-sm font-medium text-fuchsia-900">
+                Instagram - Owned Account Hunter
+              </p>
+              <p className="mt-1 text-sm text-fuchsia-800">
+                Ten tryb korzysta z oficjalnego Instagram Graph API dla
+                podlaczonego konta profesjonalnego, przeglada Wasze media z
+                wybranego okresu i szuka komentarzy swiadczacych o
+                zainteresowaniu tematem.
+              </p>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-fuchsia-900">
+                    Dni wstecz
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    className="w-full rounded border border-fuchsia-200 bg-white p-2"
+                    value={form.instagram?.days_back ?? 30}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        instagram: {
+                          ...(form.instagram ?? {}),
+                          days_back: Number(e.target.value),
+                        },
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-fuchsia-900">
+                    Opcjonalny Page ID
+                  </span>
+                  <input
+                    className="w-full rounded border border-fuchsia-200 bg-white p-2"
+                    placeholder="Strona Facebook polaczona z IG"
+                    value={form.instagram?.page_id ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        instagram: {
+                          ...(form.instagram ?? {}),
+                          page_id: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 space-y-2 text-sm text-fuchsia-900">
+                <label className="block">
+                  <input
+                    type="checkbox"
+                    checked={form.instagram?.include_comments ?? true}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        instagram: {
+                          ...(form.instagram ?? {}),
+                          include_comments: e.target.checked,
+                        },
+                      })
+                    }
+                  />{" "}
+                  analizuj komentarze pod Waszymi mediami
+                </label>
+              </div>
+
+              <p className="mt-3 text-sm text-fuchsia-800">
+                Wymagane jest konto profesjonalne Instagram polaczone ze strona
+                Facebook oraz odpowiednie uprawnienia Meta.
+              </p>
+
+              {form.quality_filters.email_required ? (
+                <p className="mt-3 text-sm text-amber-800">
+                  Uwaga: z komentarza na Instagramie nie dostaniemy od razu
+                  emaila. Email trzeba pozyskac dopiero w DM lub na landing
+                  page.
                 </p>
               ) : null}
             </div>

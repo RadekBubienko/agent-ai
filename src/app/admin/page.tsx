@@ -11,6 +11,7 @@ type Lead = {
   status: string;
   segment: string;
   total_score: number;
+  lead_origin: string;
 };
 
 type Stat = {
@@ -50,6 +51,7 @@ async function requestAdminData(
   adminToken: string,
   search: string,
   pageNum = 1,
+  origin = "landing_page",
   status = "",
   from = "",
   to = "",
@@ -59,6 +61,7 @@ async function requestAdminData(
   const params = new URLSearchParams({
     page: String(pageNum),
     search,
+    origin,
   });
 
   if (status) params.append("status", status);
@@ -89,10 +92,12 @@ export default function AdminPage() {
   const [toFollowUp, setToFollowUp] = useState(0);
   const [ipStats, setIpStats] = useState<IpStat[]>([]);
   const [segmentStats, setSegmentStats] = useState<SegmentStat[]>([]);
+  const [originFilter, setOriginFilter] = useState("landing_page");
 
   const fetchData = async (
     adminToken: string,
     pageNum = 1,
+    origin = "landing_page",
     status = "",
     from = "",
     to = "",
@@ -101,6 +106,7 @@ export default function AdminPage() {
       adminToken,
       search,
       pageNum,
+      origin,
       status,
       from,
       to,
@@ -128,7 +134,7 @@ export default function AdminPage() {
       const saved = localStorage.getItem("admin_token");
       if (!saved) return;
 
-      const data = await requestAdminData(saved, "");
+      const data = await requestAdminData(saved, "", 1, "landing_page");
       if (!data || !active) return;
 
       localStorage.setItem("admin_token", saved);
@@ -155,11 +161,14 @@ export default function AdminPage() {
   const maxDay = Math.max(...stats.map((s) => s.count), 1);
 
   const exportCSV = async () => {
-    const res = await fetch("/api/admin/leads/export", {
+    const res = await fetch(
+      `/api/admin/leads/export?origin=${encodeURIComponent(originFilter)}`,
+      {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    });
+      },
+    );
 
     if (!res.ok) return;
 
@@ -192,7 +201,7 @@ export default function AdminPage() {
               className="border p-2 rounded w-full mb-4"
             />
             <button
-              onClick={() => fetchData(token)}
+              onClick={() => fetchData(token, 1, originFilter)}
               className="bg-black text-white px-4 py-2 rounded"
             >
               Zaloguj
@@ -287,6 +296,27 @@ export default function AdminPage() {
 
             {/* Search */}
             <div className="mb-4 flex gap-2">
+              <select
+                value={originFilter}
+                onChange={(e) => {
+                  const nextOrigin = e.target.value;
+                  setOriginFilter(nextOrigin);
+                  void fetchData(
+                    token,
+                    1,
+                    nextOrigin,
+                    statusFilter,
+                    dateFrom,
+                    dateTo,
+                  );
+                }}
+                className="border p-2 rounded"
+              >
+                <option value="landing_page">Landing page</option>
+                <option value="agent">Agent</option>
+                <option value="manual">Manual</option>
+                <option value="all">Wszystkie</option>
+              </select>
               <input
                 placeholder="Szukaj email"
                 value={search}
@@ -294,7 +324,9 @@ export default function AdminPage() {
                 className="border p-2 rounded flex-1"
               />
               <button
-                onClick={() => fetchData(token)}
+                onClick={() =>
+                  fetchData(token, 1, originFilter, statusFilter, dateFrom, dateTo)
+                }
                 className="bg-black text-white px-4 rounded cursor-pointer"
               >
                 Szukaj
@@ -305,7 +337,14 @@ export default function AdminPage() {
               <button
                 onClick={() => {
                   setStatusFilter("new");
-                  fetchData(token, 1, "new", dateFrom, dateTo);
+                  void fetchData(
+                    token,
+                    1,
+                    originFilter,
+                    "new",
+                    dateFrom,
+                    dateTo,
+                  );
                 }}
                 className="px-3 py-1 border rounded cursor-pointer"
               >
@@ -315,7 +354,14 @@ export default function AdminPage() {
               <button
                 onClick={() => {
                   setStatusFilter("contacted");
-                  fetchData(token, 1, "contacted", dateFrom, dateTo);
+                  void fetchData(
+                    token,
+                    1,
+                    originFilter,
+                    "contacted",
+                    dateFrom,
+                    dateTo,
+                  );
                 }}
                 className="px-3 py-1 border rounded cursor-pointer"
               >
@@ -325,7 +371,14 @@ export default function AdminPage() {
               <button
                 onClick={() => {
                   setStatusFilter("closed");
-                  fetchData(token, 1, "closed", dateFrom, dateTo);
+                  void fetchData(
+                    token,
+                    1,
+                    originFilter,
+                    "closed",
+                    dateFrom,
+                    dateTo,
+                  );
                 }}
                 className="px-3 py-1 border rounded cursor-pointer"
               >
@@ -335,7 +388,14 @@ export default function AdminPage() {
               <button
                 onClick={() => {
                   setStatusFilter("");
-                  fetchData(token, 1, "", dateFrom, dateTo);
+                  void fetchData(
+                    token,
+                    1,
+                    originFilter,
+                    "",
+                    dateFrom,
+                    dateTo,
+                  );
                 }}
                 className="px-3 py-1 border rounded cursor-pointer"
               >
@@ -360,7 +420,7 @@ export default function AdminPage() {
 
               <button
                 onClick={() =>
-                  fetchData(token, 1, statusFilter, dateFrom, dateTo)
+                  fetchData(token, 1, originFilter, statusFilter, dateFrom, dateTo)
                 }
                 className="px-4 py-2 bg-black text-white rounded cursor-pointer"
               >
@@ -377,6 +437,7 @@ export default function AdminPage() {
                   <th className="p-2">Email</th>
                   <th className="p-2">Data</th>
                   <th className="p-2">IP</th>
+                  <th className="p-2">Pochodzenie</th>
                   <th className="p-2">Status</th>
                   <th className="p-2">Segment</th>
                   <th className="p-2">Score</th>
@@ -392,6 +453,7 @@ export default function AdminPage() {
                       {new Date(lead.created_at).toLocaleString()}
                     </td>
                     <td className="p-2">{lead.ip_address}</td>
+                    <td className="p-2">{lead.lead_origin}</td>
                     <td className="p-2">
                       <select
                         value={lead.status}
@@ -407,7 +469,14 @@ export default function AdminPage() {
                             body: JSON.stringify({ status: newStatus }),
                           });
 
-                          fetchData(token, page);
+                          void fetchData(
+                            token,
+                            page,
+                            originFilter,
+                            statusFilter,
+                            dateFrom,
+                            dateTo,
+                          );
                         }}
                         className="border p-1 rounded"
                       >
@@ -428,7 +497,14 @@ export default function AdminPage() {
               <button
                 disabled={page <= 1}
                 onClick={() =>
-                  fetchData(token, page - 1, statusFilter, dateFrom, dateTo)
+                  fetchData(
+                    token,
+                    page - 1,
+                    originFilter,
+                    statusFilter,
+                    dateFrom,
+                    dateTo,
+                  )
                 }
               >
                 ←
@@ -439,7 +515,14 @@ export default function AdminPage() {
               <button
                 disabled={page >= totalPages}
                 onClick={() =>
-                  fetchData(token, page + 1, statusFilter, dateFrom, dateTo)
+                  fetchData(
+                    token,
+                    page + 1,
+                    originFilter,
+                    statusFilter,
+                    dateFrom,
+                    dateTo,
+                  )
                 }
               >
                 →

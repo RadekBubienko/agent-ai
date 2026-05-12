@@ -1,5 +1,9 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { db } from "@/lib/db";
+import {
+  ensureLeadOriginColumn,
+  getLeadOriginFromExistingLead,
+} from "@/lib/leads/leadOrigin";
 import type { DbClient, LeadInput } from "@/types/agent";
 import {
   normalizeEmail,
@@ -29,6 +33,7 @@ type RejectedLeadRestoreRow = RejectedLeadListRow & {
   normalized_name: string | null;
   task_id: string | null;
   lead_type: string | null;
+  lead_origin: string | null;
   segment: string | null;
   status: string | null;
   total_score: number | null;
@@ -55,6 +60,7 @@ type LeadRow = RowDataPacket & {
   platform: string | null;
   task_id: string | null;
   lead_type: string | null;
+  lead_origin: string | null;
   segment: string | null;
   status: string | null;
   total_score: number | null;
@@ -68,8 +74,8 @@ let ensureRejectedLeadsTablePromise: Promise<void> | null = null;
 
 export async function ensureRejectedLeadsTable(client: DbClient = db) {
   if (!ensureRejectedLeadsTablePromise) {
-    ensureRejectedLeadsTablePromise = client
-      .query(`
+    ensureRejectedLeadsTablePromise = (async () => {
+      await client.query(`
         CREATE TABLE IF NOT EXISTS rejected_leads (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
           lead_id BIGINT NULL,
@@ -82,6 +88,7 @@ export async function ensureRejectedLeadsTable(client: DbClient = db) {
           platform VARCHAR(255) NULL,
           task_id VARCHAR(64) NULL,
           lead_type VARCHAR(64) NULL,
+          lead_origin VARCHAR(64) NULL,
           segment VARCHAR(64) NULL,
           status VARCHAR(64) NULL,
           total_score INT NULL,
@@ -96,8 +103,33 @@ export async function ensureRejectedLeadsTable(client: DbClient = db) {
           INDEX idx_rejected_leads_normalized_name (normalized_name)
         )
       `)
-      .then(() => undefined)
-      .catch((error) => {
+
+      const [leadOriginRows] = await client.query<RowDataPacket[]>(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'rejected_leads'
+          AND COLUMN_NAME = 'lead_origin'
+        LIMIT 1
+      `)
+
+      if (leadOriginRows.length === 0) {
+        await client.query(`
+          ALTER TABLE rejected_leads
+          ADD COLUMN lead_origin VARCHAR(64) NULL
+          AFTER lead_type
+        `)
+      }
+
+      await client.query(`
+        UPDATE rejected_leads
+        SET lead_origin = CASE
+          WHEN lead_origin = 'manual' THEN 'manual'
+          WHEN source = 'agent' OR source = 'facebook' OR lead_type = 'agent' OR task_id IS NOT NULL THEN 'agent'
+          ELSE 'landing_page'
+        END
+      `)
+    })().catch((error) => {
         ensureRejectedLeadsTablePromise = null;
         throw error;
       });
@@ -156,8 +188,9 @@ export async function rejectLeadById(
   const connection = await db.getConnection();
 
   try {
-    await connection.beginTransaction();
+    await ensureLeadOriginColumn(connection);
     await ensureRejectedLeadsTable(connection);
+    await connection.beginTransaction();
 
     const [rows] = await connection.query<LeadRow[]>(
       `
@@ -171,6 +204,7 @@ export async function rejectLeadById(
         platform,
         task_id,
         lead_type,
+        lead_origin,
         segment,
         status,
         total_score,
@@ -216,6 +250,7 @@ export async function rejectLeadById(
           platform,
           task_id,
           lead_type,
+          lead_origin,
           segment,
           status,
           total_score,
@@ -226,7 +261,7 @@ export async function rejectLeadById(
           rejected_at,
           original_created_at
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         `,
         [
           lead.id,
@@ -239,6 +274,7 @@ export async function rejectLeadById(
           lead.platform,
           lead.task_id,
           lead.lead_type,
+          getLeadOriginFromExistingLead(lead),
           lead.segment,
           lead.status,
           lead.total_score,
@@ -351,8 +387,9 @@ export async function restoreRejectedLeadById(
   const connection = await db.getConnection();
 
   try {
-    await connection.beginTransaction();
+    await ensureLeadOriginColumn(connection);
     await ensureRejectedLeadsTable(connection);
+    await connection.beginTransaction();
 
     const [rows] = await connection.query<RejectedLeadRestoreRow[]>(
       `
@@ -368,6 +405,7 @@ export async function restoreRejectedLeadById(
         platform,
         task_id,
         lead_type,
+        lead_origin,
         segment,
         status,
         total_score,
@@ -424,6 +462,7 @@ export async function restoreRejectedLeadById(
         platform,
         task_id,
         lead_type,
+        lead_origin,
         fit_score,
         intent_score,
         engagement_score,
@@ -432,7 +471,7 @@ export async function restoreRejectedLeadById(
         status,
         created_at
       )
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `,
       [
         rejectedLead.name,
@@ -443,6 +482,7 @@ export async function restoreRejectedLeadById(
         rejectedLead.platform,
         rejectedLead.task_id,
         rejectedLead.lead_type ?? "agent",
+        rejectedLead.lead_origin ?? getLeadOriginFromExistingLead(rejectedLead),
         rejectedLead.fit_score ?? 0,
         rejectedLead.intent_score ?? 0,
         rejectedLead.engagement_score ?? 0,

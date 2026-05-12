@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { ResultSetHeader } from "mysql2/promise";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { ensureLeadOriginColumn } from "@/lib/leads/leadOrigin";
 import { sendWelcomeEmail } from "@/lib/mailer";
 
 const LIMIT = 5;
@@ -71,8 +72,10 @@ async function createLeadWithSequence(
   ip: string,
   segment: "product" | "business" | "education",
 ) {
+  await ensureLeadOriginColumn(db);
+
   const [result] = await db.execute<ResultSetHeader>(
-    "INSERT INTO leads (name, email, ip_address, segment, created_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO leads (name, email, ip_address, segment, lead_origin, created_at) VALUES (?, ?, ?, ?, 'landing_page', ?)",
     [name, email, ip, segment, new Date()],
   );
 

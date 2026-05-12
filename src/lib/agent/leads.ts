@@ -1,5 +1,6 @@
 import type { RowDataPacket } from "mysql2/promise";
 import { db } from "@/lib/db";
+import { ensureLeadOriginColumn } from "@/lib/leads/leadOrigin";
 
 type AgentLeadRow = RowDataPacket & {
   id: number;
@@ -47,14 +48,9 @@ export async function getAgentLeads(segment?: string | null) {
 export async function getAgentLeadsByFilters(
   filters: AgentLeadFilters = {},
 ): Promise<AgentLeadPage> {
-  const whereClauses = [
-    `(
-      source = 'agent'
-      OR source = 'facebook'
-      OR lead_type = 'agent'
-      OR task_id IS NOT NULL
-    )`,
-  ];
+  await ensureLeadOriginColumn();
+
+  const whereClauses = [`lead_origin = 'agent'`];
 
   const params: string[] = [];
   const platform = filters.platform?.trim();

@@ -1,5 +1,6 @@
 import type { ResultSetHeader } from "mysql2/promise";
 import { scoreLead } from "@/lib/ai/leadScoring";
+import { ensureLeadOriginColumn } from "@/lib/leads/leadOrigin";
 import type { DbClient, LeadInput, SaveLeadResult } from "@/types/agent";
 import { findLeadMatch } from "./dedup";
 import { resolveLeadDomain } from "./leadIdentity";
@@ -31,6 +32,8 @@ export async function saveLead(
   lead: LeadInput,
   options: SaveLeadOptions = {},
 ): Promise<SaveLeadResult> {
+  await ensureLeadOriginColumn(db);
+
   const match = await findLeadMatch(db, lead);
   const taskId = options.taskId ?? null;
   const source = lead.source ?? "agent";
@@ -59,6 +62,10 @@ export async function saveLead(
         lead_type = CASE
           WHEN lead_type IS NULL OR lead_type = 'inbound' THEN 'agent'
           ELSE lead_type
+        END,
+        lead_origin = CASE
+          WHEN lead_origin IS NULL OR lead_origin = '' THEN 'agent'
+          ELSE lead_origin
         END
       WHERE id = ?
       `,
@@ -73,8 +80,8 @@ export async function saveLead(
   const [result] = await db.query<ResultSetHeader>(
     `
     INSERT INTO leads
-    (name,email,website,domain,source,platform,task_id,lead_type,fit_score,intent_score,engagement_score,total_score,segment,created_at)
-    VALUES (?,?,?,?,?,?,?,'agent',0,0,0,0,'cold',?)
+    (name,email,website,domain,source,platform,task_id,lead_type,lead_origin,fit_score,intent_score,engagement_score,total_score,segment,created_at)
+    VALUES (?,?,?,?,?,?,?,'agent','agent',0,0,0,0,'cold',?)
     `,
     [
       lead.name ?? null,

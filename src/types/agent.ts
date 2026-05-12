@@ -26,6 +26,11 @@ export type TaskConfig = {
     include_comments?: boolean
     include_reactions?: boolean
   }
+  instagram?: {
+    page_id?: string
+    days_back?: number
+    include_comments?: boolean
+  }
   limit: number
   speed: string
 }
